@@ -18,6 +18,8 @@ class ReflexConfig:
     update_stream: bool = True
     proposal_mode: str = "auto"
     dense_implementation: str = "auto"
+    pipeline: str = "auto"
+    metrics_mode: str = "production"
     profile: bool = False
     diagnostics: bool = False
 
@@ -50,6 +52,12 @@ class ReflexConfig:
             raise ValueError("persistent A requires OPD_PROJECTOR_LR > 0")
         if self.update_interval < 1:
             raise ValueError("OPD_UPDATE_INTERVAL must be positive")
+        if self.pipeline.startswith("selective") and self.dense_implementation == "gemm":
+            raise ValueError("selective pipeline requires fused correction, not GEMM")
+        if self.pipeline not in {"auto", "fused", "selective", "selective_masked"}:
+            raise ValueError("invalid OPD_PIPELINE")
+        if self.metrics_mode not in {"production", "instrumented"}:
+            raise ValueError("invalid METRICS_MODE")
         if self.proposal_mode not in {"auto", "sparse", "dense"}:
             raise ValueError("invalid OPD_PROPOSAL_MODE")
         if self.dense_implementation not in {"auto", "fused", "gemm"}:
@@ -64,6 +72,8 @@ class ReflexConfig:
                 "OPD_"
                 + {"projector_weight_decay": "projector_weight_decay"}.get(name, name).upper()
             )
+            if name == "metrics_mode":
+                key = "METRICS_MODE"
             raw = os.environ.get(key)
             if raw is not None:
                 default = getattr(defaults, name)

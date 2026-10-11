@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import math
 import os
 import sys
 from dataclasses import asdict
@@ -16,7 +17,7 @@ def env(name, cast=str):
     return cast(os.environ[name])
 
 
-def build_grpo_config():
+def build_grpo_config(*, enforce_profile=True):
     batch, responses, accum = (
         env("BATCH_SIZE", int),
         env("RESPONSES_PER_PROMPT", int),
@@ -55,7 +56,41 @@ def build_grpo_config():
         raise ValueError("METHOD must be dflash or dflash_reflex")
     if env("DATASET") not in {"simplelr", "gsm8k", "dapo"}:
         raise ValueError("invalid DATASET")
+    from dflash_reflex.fairness import validate_profile
+
+    profile = env("FAIRNESS_PROFILE")
+    if (
+        env("METHOD") == "dflash"
+        and env("METRICS_MODE") == "production"
+        and os.environ.get("OPD_PROFILE", "0").lower() in {"1", "true"}
+    ):
+        raise ValueError("baseline profiling requires METRICS_MODE=instrumented")
+    if env("METRICS_MODE") not in {"production", "instrumented"}:
+        raise ValueError("invalid METRICS_MODE")
+    beta, epsilon = env("BETA", float), env("EPSILON", float)
+    if not math.isfinite(beta) or beta < 0 or not 0 < epsilon < 1:
+        raise ValueError("BETA must be finite/nonnegative; 0 < EPSILON < 1")
+    if env("GRPO_ITERATION_NUM", int) != 1:
+        raise ValueError("pinned joint DFlash recipe supports GRPO_ITERATION_NUM=1 only")
+    lora = (
+        env("TARGET_LORA_R", int),
+        env("TARGET_LORA_ALPHA", int),
+        env("TARGET_LORA_DROPOUT", float),
+    )
+    if lora != (64, 32, 0.0):
+        raise ValueError(
+            "TARGET_LORA_* overrides unsupported: native target is full training; matched LoRA is blocked"
+        )
+    for unsupported in ("MAX_TRAINING_TOKEN", "MAX_TRAINING_PADDING_GAP", "LOGPS_CHUNK_SIZE"):
+        if unsupported in os.environ:
+            raise ValueError(
+                f"{unsupported} has no equivalent DFlash block-loss setting; do not silently remap it"
+            )
+    if enforce_profile:
+        validate_profile(profile)
     block = env("DFLASH_BLOCK_SIZE", int)
+    if block < 2:
+        raise ValueError("DFLASH_BLOCK_SIZE must be >=2")
     micro = max(1, (batch * responses) // accum)
     # B200-oriented bounded physical microbatch; ACCUMULATION_STEPS fixes the
     # minimum number of microbatches. Large batches split further for memory.
@@ -63,6 +98,24 @@ def build_grpo_config():
     global_batch = batch * responses
     if global_batch % micro:
         raise ValueError("rollout response count must be divisible by TRAIN_MICRO_BATCH_SIZE")
+    loss_config = dict(
+        reference_policy_kl_penalty=beta,
+        ratio_clip_min=epsilon,
+        ratio_clip_max=epsilon,
+        force_on_policy_ratio=False,
+    )
+    objective = env("GRPO_OBJECTIVE")
+    if objective == "specnaacl_sequence":
+        loss_config.update(
+            token_level_loss=False,
+            force_on_policy_ratio=True,
+            reference_policy_kl_type="k3",
+            kl_input_clamp_value=None,
+            kl_output_clamp_value=None,
+            specnaacl_kl_gradient=True,
+        )
+    elif objective != "original_nemo":
+        raise ValueError("GRPO_OBJECTIVE must be specnaacl_sequence or original_nemo")
     return dict(
         defaults=str(ROOT / "third_party/nemo-rl/examples/configs/grpo_math_1B_megatron.yaml"),
         grpo=dict(
@@ -79,12 +132,7 @@ def build_grpo_config():
             use_dynamic_sampling=False,
             async_grpo=dict(enabled=False),
         ),
-        loss_fn=dict(
-            reference_policy_kl_penalty=0.0,
-            ratio_clip_min=0.2,
-            ratio_clip_max=0.2,
-            force_on_policy_ratio=False,
-        ),
+        loss_fn=loss_config,
         policy=dict(
             model_name=env("MODEL"),
             train_global_batch_size=global_batch,
@@ -206,6 +254,8 @@ def main():
             # Profiling is observational and may be changed across sessions.
             reflex.pop("profile")
             reflex.pop("diagnostics")
+            reflex.pop("metrics_mode")
+            reflex.pop("pipeline")
     else:
         config = {
             k: v
@@ -314,8 +364,11 @@ def main():
                 head = None
                 for file in Path(env("MODEL")).glob("*.safetensors"):
                     with safe_open(file, framework="pt") as tensors:
-                        if "lm_head.weight" in tensors.keys():
-                            head = tensors.get_tensor("lm_head.weight")
+                        key = "lm_head.weight"
+                        if key not in tensors.keys() and target_config.get("tie_word_embeddings"):
+                            key = "model.embed_tokens.weight"
+                        if key in tensors.keys():
+                            head = tensors.get_tensor(key)
                             break
                 if head is None:
                     raise ValueError(
@@ -344,6 +397,22 @@ def main():
                 source_shas=json.loads((ROOT / "versions.lock").read_text()),
                 target_fingerprint=fingerprint(env("MODEL")),
                 pretrain_time_s=pretrain_time,
+                FAIRNESS_PROFILE=os.environ.get("FAIRNESS_PROFILE"),
+                METRICS_MODE=os.environ.get("METRICS_MODE"),
+                METHOD=os.environ.get("METHOD"),
+                DATASET=os.environ.get("DATASET"),
+                MODEL=os.environ.get("MODEL"),
+                BETA=os.environ.get("BETA"),
+                EPSILON=os.environ.get("EPSILON"),
+                GRPO_OBJECTIVE=os.environ.get("GRPO_OBJECTIVE"),
+                EFFECTIVE_TARGET_BATCH=config["policy"]["train_global_batch_size"]
+                if a.kind == "train"
+                else None,
+                TARGET_ADAPTATION="full fine-tuning (native_dflash)",
+                TARGET_OPTIMIZER_STEP_COUNT=0,
+                DRAFT_OPTIMIZER_STEP_COUNT=0,
+                OPD_PROJECTOR_LR=os.environ.get("OPD_PROJECTOR_LR"),
+                DFLASH_BLOCK_SIZE=os.environ.get("DFLASH_BLOCK_SIZE"),
             ),
             indent=2,
         )

@@ -1,0 +1,20 @@
+{
+  "vllm": {
+    "files": [
+      "vllm/v1/sample/rejection_sampler.py",
+      "vllm/v1/spec_decode/llm_base_proposer.py",
+      "vllm/v1/worker/gpu_model_runner.py"
+    ],
+    "published_patch_matches_checkout": true
+  },
+  "nemo-rl": {
+    "files": [
+      "nemo_rl/algorithms/grpo.py",
+      "nemo_rl/algorithms/loss/loss_functions.py",
+      "nemo_rl/environments/math_environment.py",
+      "nemo_rl/models/generation/vllm/vllm_worker.py",
+      "nemo_rl/models/policy/workers/megatron_policy_worker.py"
+    ],
+    "published_patch_matches_checkout": true
+  }
+}

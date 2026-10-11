@@ -27,7 +27,7 @@ def test_disabled_hook_calls_original_proposal_without_reflex(monkeypatch):
         if isinstance(node, ast.FunctionDef) and node.name == "_greedy_sample"
     )
     function.decorator_list = []
-    namespace = {"torch": torch}
+    namespace = {"torch": torch, "HOOKS_ENABLED": False, "current": vllm_runtime.current}
     exec(compile(ast.Module(body=[function], type_ignores=[]), str(file), "exec"), namespace)
 
     def forbidden(*args):

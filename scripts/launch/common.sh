@@ -27,8 +27,12 @@ resolve_run() {
   export RUN_NAME="${RUN_NAME:-${MODEL_KEY}__${kind}__${METHOD}__${DATASET}__seed${TRAIN_SUBSET_SEED}__${stamp}__$$}"
   export RUN_DIR="${RUN_DIR:-$root/$RUN_NAME}"
   export DFLASH_RESUMING=0
-  if [[ "$RESUME" == auto && -e "$root/active_run" ]]; then
-    export RUN_DIR="$(readlink -f "$root/active_run")"
+  local active="$root/active_run"
+  if [[ "$kind" == train && -e "$root/active_run_${METHOD}_${DATASET}" ]]; then
+    active="$root/active_run_${METHOD}_${DATASET}"
+  fi
+  if [[ "$RESUME" == auto && -e "$active" ]]; then
+    export RUN_DIR="$(readlink -f "$active")"
     export DFLASH_RESUMING=1
   elif [[ -n "$RESUME" && "$RESUME" != auto ]]; then
     [[ -d "$RESUME" && -d "$RESUME/checkpoints" ]] || { echo 'RESUME must be auto or a run directory' >&2; exit 2; }
@@ -45,6 +49,9 @@ prepare_run() {
   "$PYTHON_BIN" "$PROJECT_DIR/scripts/validate_environment.py" --require-runtime
   mkdir -p "$OUTPUT_ROOT/$kind/$MODEL_KEY"
   ln -sfn "$RUN_DIR" "$OUTPUT_ROOT/$kind/$MODEL_KEY/active_run"
+  if [[ "$kind" == train ]]; then
+    ln -sfn "$RUN_DIR" "$OUTPUT_ROOT/$kind/$MODEL_KEY/active_run_${METHOD}_${DATASET}"
+  fi
 }
 
 print_command() {

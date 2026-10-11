@@ -35,3 +35,28 @@ def test_vendor_patches_reproducible_and_idempotent(tmp_path):
             target = tmp_path / name / relative
             assert target.read_bytes() == (repo / relative).read_bytes()
             ast.parse(target.read_text())
+
+
+def test_previous_installed_vllm_hooks_migrate_in_place(tmp_path):
+    spec = importlib.util.spec_from_file_location(
+        "source_patcher_migration", ROOT / "scripts/patch_upstream.py"
+    )
+    patcher = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(patcher)
+    repo = ROOT / "third_party/vllm"
+    paths = subprocess.check_output(
+        ["git", "-C", str(repo), "diff", "--name-only"], text=True
+    ).splitlines()
+    for relative in paths:
+        path = tmp_path / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(
+            subprocess.check_output(["git", "-C", str(repo), "show", "HEAD:" + relative])
+        )
+    subprocess.run(
+        ["git", "apply", str(ROOT / "tests/reference/vllm_legacy.patch")], cwd=tmp_path, check=True
+    )
+    patcher.patch_vllm(tmp_path / "vllm")
+    patcher.patch_vllm(tmp_path / "vllm")
+    for relative in paths:
+        assert (tmp_path / relative).read_bytes() == (repo / relative).read_bytes()

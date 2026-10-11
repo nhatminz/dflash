@@ -122,5 +122,7 @@ def test_engine_boundary_refits_a_reuses_storage_and_resets_b(tmp_path, monkeypa
     torch.testing.assert_close(adapter.A.cpu(), updated)
     engine.finish_rpc(worker)
     assert engine.begin_rpc(worker, "baseline", str(path), False, config) == -1
-    assert engine.current().adapter is None
+    assert engine.current() is None
+    assert engine._runtime.adapter is None
+    assert engine._runtime.accepted_buffer is None
     engine.finish_rpc(worker)

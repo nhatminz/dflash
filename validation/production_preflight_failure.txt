@@ -1,0 +1,29 @@
+Traceback (most recent call last):
+  File "/mnt/hdd/nhatminh/SpecDecode/dflash/scripts/validate_environment.py", line 125, in <module>
+    main()
+  File "/mnt/hdd/nhatminh/SpecDecode/dflash/scripts/validate_environment.py", line 93, in main
+    state = inspect_python(python, backend)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/hdd/nhatminh/SpecDecode/dflash/scripts/validate_environment.py", line 42, in inspect_python
+    raise RuntimeError(f"{backend} environment failed: {python}\n{process.stderr[-6000:]}")
+RuntimeError: base environment failed: /mnt/hdd/nhatminh/SpecDecode/dflash/.venv-test/bin/python
+Traceback (most recent call last):
+  File "/home/hmi/anaconda3/envs/GAGAvatar_track/lib/python3.12/importlib/metadata/__init__.py", line 397, in from_name
+    return next(cls.discover(name=name))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+StopIteration
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "<string>", line 4, in <module>
+  File "/home/hmi/anaconda3/envs/GAGAvatar_track/lib/python3.12/importlib/metadata/__init__.py", line 888, in version
+    return distribution(distribution_name).version
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/hmi/anaconda3/envs/GAGAvatar_track/lib/python3.12/importlib/metadata/__init__.py", line 861, in distribution
+    return Distribution.from_name(distribution_name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/hmi/anaconda3/envs/GAGAvatar_track/lib/python3.12/importlib/metadata/__init__.py", line 399, in from_name
+    raise PackageNotFoundError(name)
+importlib.metadata.PackageNotFoundError: No package metadata was found for ray
+

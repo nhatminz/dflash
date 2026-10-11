@@ -20,6 +20,7 @@ def test_dry_run_without_models_or_cuda(model, method, tmp_path):
         check=True,
         env=dict(
             os.environ,
+            FAIRNESS_PROFILE="native_dflash",
             DRY_RUN="true",
             OUTPUT_ROOT=str(tmp_path),
             DATASET="dapo",
@@ -81,7 +82,7 @@ def test_resume_rejects_changed_method_or_reflex_parameters(tmp_path):
             str(ROOT / "configs/qwen3_4b/b200.env"),
             str(ROOT / "configs/_shared/b200_common.env"),
         ],
-        env=dict(os.environ, METHOD="dflash_reflex"),
+        env=dict(os.environ, FAIRNESS_PROFILE="native_dflash", METHOD="dflash_reflex"),
     )
     environment = dict(item.decode().split("=", 1) for item in defaults.split(b"\0") if item)
     environment.update(

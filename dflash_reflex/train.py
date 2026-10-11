@@ -3,12 +3,14 @@
 import argparse
 import json
 import os
+import time
 from pathlib import Path
 
 from .model_contract import validate_checkpoint
 
 
 def main():
+    wall_start = time.perf_counter()
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--config", required=True)
     a = p.parse_args()
@@ -65,7 +67,7 @@ def main():
         teacher_groups,
         aliases,
     ) = setup(master, tokenizer, dataset, val_dataset)
-    configure_driver(checkpointer.get_latest_checkpoint_path())
+    configure_driver(checkpointer.get_latest_checkpoint_path(), wall_start=wall_start)
     try:
         grpo_train(
             policy,

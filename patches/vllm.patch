@@ -1,20 +1,28 @@
 diff --git a/vllm/v1/sample/rejection_sampler.py b/vllm/v1/sample/rejection_sampler.py
-index 1324191..76eea01 100644
+index 1324191..f6e1e88 100644
 --- a/vllm/v1/sample/rejection_sampler.py
 +++ b/vllm/v1/sample/rejection_sampler.py
-@@ -424,6 +424,11 @@ def rejection_sample(
+@@ -8,6 +8,8 @@ from dataclasses import replace
+ from typing import TYPE_CHECKING
+ 
+ import torch
++from functools import partial
++from dflash_reflex.vllm_runtime import HOOKS_ENABLED, PROFILE_ENABLED, current, profiled_forward
+ import torch.nn as nn
+ 
+ from vllm.logger import init_logger
+@@ -424,6 +426,10 @@ def rejection_sample(
      assert bonus_token_ids.is_contiguous()
      assert target_logits.shape == (num_tokens, vocab_size)
  
-+    from dflash_reflex.vllm_runtime import current
-+    reflex = current()
++    reflex = current() if HOOKS_ENABLED else None
 +    if reflex is not None and synthetic_mode:
 +        raise ValueError("Reflex requires actual rejection sampling")
 +    feedback_accept = reflex.acceptance_buffer(batch_size) if reflex is not None else None
      # Create output buffer.
      output_token_ids = torch.full(
          (batch_size, max_spec_len + 1),
-@@ -464,8 +469,13 @@ def rejection_sample(
+@@ -464,8 +470,13 @@ def rejection_sample(
              uniform_probs,
              synthetic_conditional_rates,
              SYNTHETIC_MODE=synthetic_mode,
@@ -28,7 +36,7 @@ index 1324191..76eea01 100644
              return output_token_ids
  
      # Compute probability distribution from target logits.
-@@ -503,7 +513,14 @@ def rejection_sample(
+@@ -503,7 +514,14 @@ def rejection_sample(
          synthetic_conditional_rates,
          NO_DRAFT_PROBS=draft_probs is None,
          SYNTHETIC_MODE=synthetic_mode,
@@ -43,7 +51,7 @@ index 1324191..76eea01 100644
      return output_token_ids
  
  
-@@ -723,6 +740,7 @@ def rejection_greedy_sample_kernel(
+@@ -723,6 +741,7 @@ def rejection_greedy_sample_kernel(
      uniform_probs_ptr,  # [num_tokens] or None (synthetic mode only)
      synthetic_conditional_rates_ptr,  # [num_speculative_tokens] or None
      SYNTHETIC_MODE: tl.constexpr,
@@ -51,7 +59,7 @@ index 1324191..76eea01 100644
  ):
      req_idx = tl.program_id(0)
      # FIXME(woosuk): Because is_greedy_ptr is not None at profiling run,
-@@ -741,6 +759,7 @@ def rejection_greedy_sample_kernel(
+@@ -741,6 +760,7 @@ def rejection_greedy_sample_kernel(
      num_draft_tokens = end_idx - start_idx
  
      rejected = False
@@ -59,7 +67,7 @@ index 1324191..76eea01 100644
      for pos in range(num_draft_tokens):
          if not rejected:
              draft_token_id = tl.load(draft_token_ids_ptr + start_idx + pos)
-@@ -755,11 +774,14 @@ def rejection_greedy_sample_kernel(
+@@ -755,11 +775,14 @@ def rejection_greedy_sample_kernel(
              else:
                  token_id = target_argmax_id
                  rejected = draft_token_id != target_argmax_id
@@ -74,7 +82,7 @@ index 1324191..76eea01 100644
      if not rejected:
          # If all tokens are accepted, append the bonus token.
          bonus_token_id = tl.load(bonus_token_ids_ptr + req_idx)
-@@ -786,6 +808,7 @@ def rejection_random_sample_kernel(
+@@ -786,6 +809,7 @@ def rejection_random_sample_kernel(
      synthetic_conditional_rates_ptr,  # [num_speculative_tokens] or None
      NO_DRAFT_PROBS: tl.constexpr,
      SYNTHETIC_MODE: tl.constexpr,
@@ -82,7 +90,7 @@ index 1324191..76eea01 100644
  ):
      req_idx = tl.program_id(0)
      is_greedy = tl.load(is_greedy_ptr + req_idx)
-@@ -802,6 +825,7 @@ def rejection_random_sample_kernel(
+@@ -802,6 +826,7 @@ def rejection_random_sample_kernel(
      num_draft_tokens = end_idx - start_idx
  
      rejected = False
@@ -90,7 +98,7 @@ index 1324191..76eea01 100644
      for pos in range(num_draft_tokens):
          if not rejected:
              draft_token_id = tl.load(draft_token_ids_ptr + start_idx + pos)
-@@ -828,6 +852,7 @@ def rejection_random_sample_kernel(
+@@ -828,6 +853,7 @@ def rejection_random_sample_kernel(
                  # we check it to avoid NaNs. If it happens to be 0, we reject.
                  accepted = draft_prob > 0 and target_prob / draft_prob >= uniform_prob
              if accepted:
@@ -98,7 +106,7 @@ index 1324191..76eea01 100644
                  token_id = draft_token_id
              else:
                  rejected = True
-@@ -836,6 +861,8 @@ def rejection_random_sample_kernel(
+@@ -836,6 +862,8 @@ def rejection_random_sample_kernel(
                  output_token_ids_ptr + req_idx * (max_spec_len + 1) + pos, token_id
              )
  
@@ -108,52 +116,68 @@ index 1324191..76eea01 100644
          # If all tokens are accepted, append the bonus token.
          bonus_token_id = tl.load(bonus_token_ids_ptr + req_idx)
 diff --git a/vllm/v1/spec_decode/llm_base_proposer.py b/vllm/v1/spec_decode/llm_base_proposer.py
-index 756c5f3..b64f4fc 100644
+index 756c5f3..7c147c5 100644
 --- a/vllm/v1/spec_decode/llm_base_proposer.py
 +++ b/vllm/v1/spec_decode/llm_base_proposer.py
-@@ -427,6 +427,10 @@ class SpecDecodeBaseProposer:
+@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING, Any, cast
+ 
+ import numpy as np
+ import torch
++from functools import partial
++from dflash_reflex.vllm_runtime import HOOKS_ENABLED, PROFILE_ENABLED, current, profiled_forward
+ import torch.nn as nn
+ 
+ from vllm.compilation.breakable_cudagraph import BreakableCUDAGraphWrapper
+@@ -427,6 +429,9 @@ class SpecDecodeBaseProposer:
  
      def _greedy_sample(self, hidden_states: torch.Tensor) -> torch.Tensor:
          """Greedy-sample draft tokens from hidden states."""
-+        from dflash_reflex.vllm_runtime import current
-+        reflex = current()
++        reflex = current() if HOOKS_ENABLED else None
 +        if self.method == "dflash" and reflex is not None and reflex.enabled:
 +            return reflex.propose(self.model, hidden_states)
          if self.use_local_argmax_reduction:
              return self.model.get_top_tokens(hidden_states)
          if self.use_heterogeneous_vocab:
-@@ -587,7 +591,8 @@ class SpecDecodeBaseProposer:
+@@ -587,7 +592,8 @@ class SpecDecodeBaseProposer:
                  slot_mapping_size, common_attn_metadata.slot_mapping
              ),
          ):
 -            ret_hidden_states = self.model(**model_kwargs)
-+            from dflash_reflex.vllm_runtime import profiled_forward
-+            ret_hidden_states = profiled_forward("dflash_forward_ms", self.model, **model_kwargs)
++            ret_hidden_states = (profiled_forward("dflash_forward_ms", self.model, **model_kwargs)
++                                 if PROFILE_ENABLED else self.model(**model_kwargs))
              if not self.model_returns_tuple():
                  last_hidden_states = ret_hidden_states
                  hidden_states = last_hidden_states
 diff --git a/vllm/v1/worker/gpu_model_runner.py b/vllm/v1/worker/gpu_model_runner.py
-index e9b23f1..2ae9c11 100644
+index e9b23f1..ede6694 100644
 --- a/vllm/v1/worker/gpu_model_runner.py
 +++ b/vllm/v1/worker/gpu_model_runner.py
-@@ -3600,6 +3600,10 @@ class GPUModelRunner(
+@@ -16,6 +16,8 @@ from typing import TYPE_CHECKING, Any, NamedTuple, TypeAlias, cast
+ 
+ import numpy as np
+ import torch
++from functools import partial
++from dflash_reflex.vllm_runtime import HOOKS_ENABLED, PROFILE_ENABLED, current, profiled_forward
+ import torch.distributed
+ import torch.nn as nn
+ from tqdm import tqdm
+@@ -3600,6 +3602,9 @@ class GPUModelRunner(
      ) -> SamplerOutput:
          # Sample the next token and get logprobs if needed.
          sampling_metadata = self.input_batch.sampling_metadata
-+        from dflash_reflex.vllm_runtime import current
-+        reflex = current()
++        reflex = current() if HOOKS_ENABLED else None
 +        if reflex is not None:
 +            reflex.context(self)
          # Update output token ids with tokens sampled in last step
          # if async scheduling and required by current sampling params.
          self.input_batch.update_async_output_token_ids()
-@@ -3804,7 +3808,8 @@ class GPUModelRunner(
+@@ -3804,7 +3809,8 @@ class GPUModelRunner(
          Returns:
              Model output tensor
          """
 -        return self.model(
-+        from dflash_reflex.vllm_runtime import profiled_forward
-+        return profiled_forward("target_forward_ms", self.model,
++        return (partial(profiled_forward, "target_forward_ms", self.model)
++                if PROFILE_ENABLED else self.model)(
              input_ids=input_ids,
              positions=positions,
              intermediate_tensors=intermediate_tensors,

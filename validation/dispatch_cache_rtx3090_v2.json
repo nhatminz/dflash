@@ -1,0 +1,591 @@
+{
+  "schema_version": 2,
+  "gpu": "NVIDIA GeForce RTX 3090",
+  "capability": [
+    8,
+    6
+  ],
+  "block_size": 16,
+  "gpu_thresholds": {
+    "NVIDIA GeForce RTX 3090|15|2560|151936|8|16|torch.bfloat16": {
+      "threshold_rows": 151937,
+      "measurements": [
+        {
+          "density": 0.02,
+          "mode": "sparse",
+          "implementation": "fused",
+          "median_ms": 0.2682879865169525,
+          "p95_ms": 0.3201279938220978,
+          "allocated_bytes": 822889472,
+          "peak_allocated_bytes": 823043072,
+          "scratch_peak_bytes": 153600
+        },
+        {
+          "density": 0.02,
+          "mode": "dense",
+          "implementation": "fused",
+          "median_ms": 0.2969599962234497,
+          "p95_ms": 0.3484160006046295,
+          "allocated_bytes": 822889472,
+          "peak_allocated_bytes": 823043072,
+          "scratch_peak_bytes": 153600
+        },
+        {
+          "density": 0.02,
+          "mode": "dense",
+          "implementation": "gemm",
+          "median_ms": 0.3031040132045746,
+          "p95_ms": 0.34406399726867676,
+          "allocated_bytes": 832005632,
+          "peak_allocated_bytes": 832159232,
+          "scratch_peak_bytes": 153600
+        },
+        {
+          "density": 0.2,
+          "mode": "sparse",
+          "implementation": "fused",
+          "median_ms": 0.2754560112953186,
+          "p95_ms": 0.3275200128555298,
+          "allocated_bytes": 832005632,
+          "peak_allocated_bytes": 832159232,
+          "scratch_peak_bytes": 153600
+        },
+        {
+          "density": 0.2,
+          "mode": "dense",
+          "implementation": "fused",
+          "median_ms": 0.2969599962234497,
+          "p95_ms": 0.35020801424980164,
+          "allocated_bytes": 832005632,
+          "peak_allocated_bytes": 832159232,
+          "scratch_peak_bytes": 153600
+        },
+        {
+          "density": 0.2,
+          "mode": "dense",
+          "implementation": "gemm",
+          "median_ms": 0.3031040132045746,
+          "p95_ms": 0.3440000116825104,
+          "allocated_bytes": 832005632,
+          "peak_allocated_bytes": 832159232,
+          "scratch_peak_bytes": 153600
+        },
+        {
+          "density": 1.0,
+          "mode": "sparse",
+          "implementation": "fused",
+          "median_ms": 0.2969599962234497,
+          "p95_ms": 0.3490560054779053,
+          "allocated_bytes": 832005632,
+          "peak_allocated_bytes": 832159232,
+          "scratch_peak_bytes": 153600
+        },
+        {
+          "density": 1.0,
+          "mode": "dense",
+          "implementation": "fused",
+          "median_ms": 0.29603201150894165,
+          "p95_ms": 0.3481599986553192,
+          "allocated_bytes": 832005632,
+          "peak_allocated_bytes": 832159232,
+          "scratch_peak_bytes": 153600
+        },
+        {
+          "density": 1.0,
+          "mode": "dense",
+          "implementation": "gemm",
+          "median_ms": 0.30320000648498535,
+          "p95_ms": 0.340831995010376,
+          "allocated_bytes": 832005632,
+          "peak_allocated_bytes": 832159232,
+          "scratch_peak_bytes": 153600
+        },
+        {
+          "density": 0.02,
+          "mode": "GPU auto policy",
+          "implementation": "fused",
+          "median_ms": 0.2682879865169525,
+          "p95_ms": 0.3246079981327057,
+          "allocated_bytes": 832005632,
+          "peak_allocated_bytes": 832159232,
+          "scratch_peak_bytes": 153600
+        },
+        {
+          "density": 0.2,
+          "mode": "GPU auto policy",
+          "implementation": "fused",
+          "median_ms": 0.2764799892902374,
+          "p95_ms": 0.6266880035400391,
+          "allocated_bytes": 832005632,
+          "peak_allocated_bytes": 832159232,
+          "scratch_peak_bytes": 153600
+        },
+        {
+          "density": 1.0,
+          "mode": "GPU auto policy",
+          "implementation": "fused",
+          "median_ms": 0.2959359884262085,
+          "p95_ms": 0.3491840064525604,
+          "allocated_bytes": 832005632,
+          "peak_allocated_bytes": 832159232,
+          "scratch_peak_bytes": 153600
+        }
+      ]
+    },
+    "NVIDIA GeForce RTX 3090|120|2560|151936|8|16|torch.bfloat16": {
+      "threshold_rows": 151937,
+      "measurements": [
+        {
+          "density": 0.02,
+          "mode": "sparse",
+          "implementation": "fused",
+          "median_ms": 1.558527946472168,
+          "p95_ms": 1.6486400365829468,
+          "allocated_bytes": 956964352,
+          "peak_allocated_bytes": 958193152,
+          "scratch_peak_bytes": 1228800
+        },
+        {
+          "density": 0.02,
+          "mode": "dense",
+          "implementation": "fused",
+          "median_ms": 1.7663999795913696,
+          "p95_ms": 1.854591965675354,
+          "allocated_bytes": 956964352,
+          "peak_allocated_bytes": 958193152,
+          "scratch_peak_bytes": 1228800
+        },
+        {
+          "density": 0.02,
+          "mode": "dense",
+          "implementation": "gemm",
+          "median_ms": 1.7715200185775757,
+          "p95_ms": 1.838912010192871,
+          "allocated_bytes": 1029893632,
+          "peak_allocated_bytes": 1031122432,
+          "scratch_peak_bytes": 1228800
+        },
+        {
+          "density": 0.2,
+          "mode": "sparse",
+          "implementation": "fused",
+          "median_ms": 1.5964159965515137,
+          "p95_ms": 1.9199999570846558,
+          "allocated_bytes": 1029893632,
+          "peak_allocated_bytes": 1031122432,
+          "scratch_peak_bytes": 1228800
+        },
+        {
+          "density": 0.2,
+          "mode": "dense",
+          "implementation": "fused",
+          "median_ms": 1.766495943069458,
+          "p95_ms": 1.897279977798462,
+          "allocated_bytes": 1029893632,
+          "peak_allocated_bytes": 1031122432,
+          "scratch_peak_bytes": 1228800
+        },
+        {
+          "density": 0.2,
+          "mode": "dense",
+          "implementation": "gemm",
+          "median_ms": 1.772544026374817,
+          "p95_ms": 1.8391040563583374,
+          "allocated_bytes": 1029893632,
+          "peak_allocated_bytes": 1031122432,
+          "scratch_peak_bytes": 1228800
+        },
+        {
+          "density": 1.0,
+          "mode": "sparse",
+          "implementation": "fused",
+          "median_ms": 1.7643519639968872,
+          "p95_ms": 1.8513920307159424,
+          "allocated_bytes": 1029893632,
+          "peak_allocated_bytes": 1031122432,
+          "scratch_peak_bytes": 1228800
+        },
+        {
+          "density": 1.0,
+          "mode": "dense",
+          "implementation": "fused",
+          "median_ms": 1.7817599773406982,
+          "p95_ms": 1.8647040128707886,
+          "allocated_bytes": 1029893632,
+          "peak_allocated_bytes": 1031122432,
+          "scratch_peak_bytes": 1228800
+        },
+        {
+          "density": 1.0,
+          "mode": "dense",
+          "implementation": "gemm",
+          "median_ms": 1.7818880081176758,
+          "p95_ms": 1.8453760147094727,
+          "allocated_bytes": 1029893632,
+          "peak_allocated_bytes": 1031122432,
+          "scratch_peak_bytes": 1228800
+        },
+        {
+          "density": 0.02,
+          "mode": "GPU auto policy",
+          "implementation": "fused",
+          "median_ms": 1.572864055633545,
+          "p95_ms": 1.6533759832382202,
+          "allocated_bytes": 1029893632,
+          "peak_allocated_bytes": 1031122432,
+          "scratch_peak_bytes": 1228800
+        },
+        {
+          "density": 0.2,
+          "mode": "GPU auto policy",
+          "implementation": "fused",
+          "median_ms": 1.5953919887542725,
+          "p95_ms": 1.6752640008926392,
+          "allocated_bytes": 1029893632,
+          "peak_allocated_bytes": 1031122432,
+          "scratch_peak_bytes": 1228800
+        },
+        {
+          "density": 1.0,
+          "mode": "GPU auto policy",
+          "implementation": "fused",
+          "median_ms": 1.7500159740447998,
+          "p95_ms": 1.8305280208587646,
+          "allocated_bytes": 1029893632,
+          "peak_allocated_bytes": 1031122432,
+          "scratch_peak_bytes": 1228800
+        }
+      ]
+    },
+    "NVIDIA GeForce RTX 3090|480|2560|151936|8|16|torch.bfloat16": {
+      "threshold_rows": 151937,
+      "measurements": [
+        {
+          "density": 0.02,
+          "mode": "sparse",
+          "implementation": "fused",
+          "median_ms": 6.150400161743164,
+          "p95_ms": 6.326272010803223,
+          "allocated_bytes": 1420920320,
+          "peak_allocated_bytes": 1426614784,
+          "scratch_peak_bytes": 5694464
+        },
+        {
+          "density": 0.02,
+          "mode": "dense",
+          "implementation": "fused",
+          "median_ms": 7.028031826019287,
+          "p95_ms": 7.140448093414307,
+          "allocated_bytes": 1420920320,
+          "peak_allocated_bytes": 1426614784,
+          "scratch_peak_bytes": 5694464
+        },
+        {
+          "density": 0.02,
+          "mode": "dense",
+          "implementation": "gemm",
+          "median_ms": 7.028736114501953,
+          "p95_ms": 7.137279987335205,
+          "allocated_bytes": 1712637440,
+          "peak_allocated_bytes": 1718331904,
+          "scratch_peak_bytes": 5694464
+        },
+        {
+          "density": 0.2,
+          "mode": "sparse",
+          "implementation": "fused",
+          "median_ms": 6.304768085479736,
+          "p95_ms": 6.401023864746094,
+          "allocated_bytes": 1712637440,
+          "peak_allocated_bytes": 1718331904,
+          "scratch_peak_bytes": 5694464
+        },
+        {
+          "density": 0.2,
+          "mode": "dense",
+          "implementation": "fused",
+          "median_ms": 7.027711868286133,
+          "p95_ms": 7.207776069641113,
+          "allocated_bytes": 1712637440,
+          "peak_allocated_bytes": 1718331904,
+          "scratch_peak_bytes": 5694464
+        },
+        {
+          "density": 0.2,
+          "mode": "dense",
+          "implementation": "gemm",
+          "median_ms": 7.017536163330078,
+          "p95_ms": 7.120895862579346,
+          "allocated_bytes": 1712637440,
+          "peak_allocated_bytes": 1718331904,
+          "scratch_peak_bytes": 5694464
+        },
+        {
+          "density": 1.0,
+          "mode": "sparse",
+          "implementation": "fused",
+          "median_ms": 7.081984043121338,
+          "p95_ms": 7.270431995391846,
+          "allocated_bytes": 1712637440,
+          "peak_allocated_bytes": 1718331904,
+          "scratch_peak_bytes": 5694464
+        },
+        {
+          "density": 1.0,
+          "mode": "dense",
+          "implementation": "fused",
+          "median_ms": 7.088128089904785,
+          "p95_ms": 7.265344142913818,
+          "allocated_bytes": 1712637440,
+          "peak_allocated_bytes": 1718331904,
+          "scratch_peak_bytes": 5694464
+        },
+        {
+          "density": 1.0,
+          "mode": "dense",
+          "implementation": "gemm",
+          "median_ms": 7.114751815795898,
+          "p95_ms": 7.165919780731201,
+          "allocated_bytes": 1712637440,
+          "peak_allocated_bytes": 1718331904,
+          "scratch_peak_bytes": 5694464
+        },
+        {
+          "density": 0.02,
+          "mode": "GPU auto policy",
+          "implementation": "fused",
+          "median_ms": 6.157311916351318,
+          "p95_ms": 6.459680080413818,
+          "allocated_bytes": 1712637440,
+          "peak_allocated_bytes": 1718331904,
+          "scratch_peak_bytes": 5694464
+        },
+        {
+          "density": 0.2,
+          "mode": "GPU auto policy",
+          "implementation": "fused",
+          "median_ms": 6.306816101074219,
+          "p95_ms": 6.47270393371582,
+          "allocated_bytes": 1712637440,
+          "peak_allocated_bytes": 1718331904,
+          "scratch_peak_bytes": 5694464
+        },
+        {
+          "density": 1.0,
+          "mode": "GPU auto policy",
+          "implementation": "fused",
+          "median_ms": 6.99289608001709,
+          "p95_ms": 7.137279987335205,
+          "allocated_bytes": 1712637440,
+          "peak_allocated_bytes": 1718331904,
+          "scratch_peak_bytes": 5694464
+        }
+      ]
+    },
+    "NVIDIA GeForce RTX 3090|960|2560|151936|8|16|torch.bfloat16": {
+      "threshold_rows": 151937,
+      "measurements": [
+        {
+          "density": 0.02,
+          "mode": "sparse",
+          "implementation": "fused",
+          "median_ms": 12.33407974243164,
+          "p95_ms": 12.530688285827637,
+          "allocated_bytes": 2037040640,
+          "peak_allocated_bytes": 2046871040,
+          "scratch_peak_bytes": 9830400
+        },
+        {
+          "density": 0.02,
+          "mode": "dense",
+          "implementation": "fused",
+          "median_ms": 14.127103805541992,
+          "p95_ms": 14.28991985321045,
+          "allocated_bytes": 2037040640,
+          "peak_allocated_bytes": 2046871040,
+          "scratch_peak_bytes": 9830400
+        },
+        {
+          "density": 0.02,
+          "mode": "dense",
+          "implementation": "gemm",
+          "median_ms": 14.07692813873291,
+          "p95_ms": 14.225407600402832,
+          "allocated_bytes": 2620474880,
+          "peak_allocated_bytes": 2630305280,
+          "scratch_peak_bytes": 9830400
+        },
+        {
+          "density": 0.2,
+          "mode": "sparse",
+          "implementation": "fused",
+          "median_ms": 12.67199993133545,
+          "p95_ms": 12.868608474731445,
+          "allocated_bytes": 2620474880,
+          "peak_allocated_bytes": 2630305280,
+          "scratch_peak_bytes": 9830400
+        },
+        {
+          "density": 0.2,
+          "mode": "dense",
+          "implementation": "fused",
+          "median_ms": 14.125056266784668,
+          "p95_ms": 14.3253755569458,
+          "allocated_bytes": 2620474880,
+          "peak_allocated_bytes": 2630305280,
+          "scratch_peak_bytes": 9830400
+        },
+        {
+          "density": 0.2,
+          "mode": "dense",
+          "implementation": "gemm",
+          "median_ms": 14.160896301269531,
+          "p95_ms": 14.41055965423584,
+          "allocated_bytes": 2620474880,
+          "peak_allocated_bytes": 2630305280,
+          "scratch_peak_bytes": 9830400
+        },
+        {
+          "density": 1.0,
+          "mode": "sparse",
+          "implementation": "fused",
+          "median_ms": 14.235648155212402,
+          "p95_ms": 14.403200149536133,
+          "allocated_bytes": 2620474880,
+          "peak_allocated_bytes": 2630305280,
+          "scratch_peak_bytes": 9830400
+        },
+        {
+          "density": 1.0,
+          "mode": "dense",
+          "implementation": "fused",
+          "median_ms": 14.128128051757812,
+          "p95_ms": 14.307135581970215,
+          "allocated_bytes": 2620474880,
+          "peak_allocated_bytes": 2630305280,
+          "scratch_peak_bytes": 9830400
+        },
+        {
+          "density": 1.0,
+          "mode": "dense",
+          "implementation": "gemm",
+          "median_ms": 14.263296127319336,
+          "p95_ms": 14.407584190368652,
+          "allocated_bytes": 2620474880,
+          "peak_allocated_bytes": 2630305280,
+          "scratch_peak_bytes": 9830400
+        },
+        {
+          "density": 0.02,
+          "mode": "GPU auto policy",
+          "implementation": "fused",
+          "median_ms": 12.372991561889648,
+          "p95_ms": 12.658687591552734,
+          "allocated_bytes": 2620474880,
+          "peak_allocated_bytes": 2630305280,
+          "scratch_peak_bytes": 9830400
+        },
+        {
+          "density": 0.2,
+          "mode": "GPU auto policy",
+          "implementation": "fused",
+          "median_ms": 12.660736083984375,
+          "p95_ms": 12.842880249023438,
+          "allocated_bytes": 2620474880,
+          "peak_allocated_bytes": 2630305280,
+          "scratch_peak_bytes": 9830400
+        },
+        {
+          "density": 1.0,
+          "mode": "GPU auto policy",
+          "implementation": "fused",
+          "median_ms": 14.041407585144043,
+          "p95_ms": 14.113792419433594,
+          "allocated_bytes": 2620474880,
+          "peak_allocated_bytes": 2630305280,
+          "scratch_peak_bytes": 9830400
+        }
+      ]
+    }
+  },
+  "pipelines": {
+    "NVIDIA GeForce RTX 3090|1|15|2560|151936|8|16|torch.bfloat16": "selective_masked",
+    "NVIDIA GeForce RTX 3090|8|15|2560|151936|8|16|torch.bfloat16": "selective",
+    "NVIDIA GeForce RTX 3090|32|15|2560|151936|8|16|torch.bfloat16": "selective",
+    "NVIDIA GeForce RTX 3090|64|15|2560|151936|8|16|torch.bfloat16": "selective"
+  },
+  "pipelines_by_density": {
+    "NVIDIA GeForce RTX 3090|1|15|2560|151936|8|16|torch.bfloat16": [
+      {
+        "density": 0.06666666666666667,
+        "pipeline": "selective_masked"
+      },
+      {
+        "density": 0.2,
+        "pipeline": "selective_masked"
+      },
+      {
+        "density": 0.5333333333333333,
+        "pipeline": "selective_masked"
+      },
+      {
+        "density": 1.0,
+        "pipeline": "fused"
+      }
+    ],
+    "NVIDIA GeForce RTX 3090|8|15|2560|151936|8|16|torch.bfloat16": [
+      {
+        "density": 0.06666666666666667,
+        "pipeline": "selective_masked"
+      },
+      {
+        "density": 0.2,
+        "pipeline": "selective_masked"
+      },
+      {
+        "density": 0.5333333333333333,
+        "pipeline": "selective"
+      },
+      {
+        "density": 1.0,
+        "pipeline": "fused"
+      }
+    ],
+    "NVIDIA GeForce RTX 3090|32|15|2560|151936|8|16|torch.bfloat16": [
+      {
+        "density": 0.06666666666666667,
+        "pipeline": "selective_masked"
+      },
+      {
+        "density": 0.2,
+        "pipeline": "selective_masked"
+      },
+      {
+        "density": 0.5333333333333333,
+        "pipeline": "selective"
+      },
+      {
+        "density": 1.0,
+        "pipeline": "fused"
+      }
+    ],
+    "NVIDIA GeForce RTX 3090|64|15|2560|151936|8|16|torch.bfloat16": [
+      {
+        "density": 0.06666666666666667,
+        "pipeline": "selective_masked"
+      },
+      {
+        "density": 0.2,
+        "pipeline": "selective_masked"
+      },
+      {
+        "density": 0.5333333333333333,
+        "pipeline": "selective"
+      },
+      {
+        "density": 1.0,
+        "pipeline": "fused"
+      }
+    ]
+  }
+}

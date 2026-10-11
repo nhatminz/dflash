@@ -65,8 +65,12 @@ def topk_union_tail(p, q, weights, topk=16):
     full = valid.sum(-1) == p.shape[-1]
     pt = torch.where(full, 0.0, (1 - pu.sum(-1)).clamp_min(0))
     qt = torch.where(full, 0.0, (1 - qu.sum(-1)).clamp_min(0))
-    kl = torch.where(pu > 0, pu * (pu.log() - qu.log()), 0.0).sum(-1)
-    kl += torch.where(pt > 0, pt * (pt.log() - qt.log()), 0.0)
+    kl = torch.where(
+        pu > 0, pu * (pu.log() - qu.clamp_min(torch.finfo(torch.float32).tiny).log()), 0.0
+    ).sum(-1)
+    kl += torch.where(
+        pt > 0, pt * (pt.log() - qt.clamp_min(torch.finfo(torch.float32).tiny).log()), 0.0
+    )
     tv = ((pu - qu).abs().sum(-1) + (pt - qt).abs()) * 0.5
     g = torch.where(valid, (qu - pu) * weights[..., None], 0.0)
     return UnionFeedback(ids, valid, g, pt, qt, kl, tv, weights.sum())

@@ -1,0 +1,757 @@
+{
+  "model": "qwen3_4b",
+  "dataset": "simplelr",
+  "profile": "specnaacl_matched",
+  "supported": false,
+  "strict_cross_framework_equivalence": false,
+  "SpecNaacl_model_config_present": true,
+  "blockers": [
+    "Target LoRA: pinned nemo_rl/models/megatron/setup.py constructs Bridge LoRA on fused linear_qkv/linear_fc1. This shares input factors across Q/K/V and gate/up, unlike seven independent PEFT rank-64 adapters. Canonical injection, merged vLLM refit and checkpoint round-trip have not been integrated/validated.",
+    "Requested four-rollout target accumulation with independent draft/A steps is not expressed by the pinned joint Megatron target+draft optimizer. Raising train_global_batch_size does not implement it. Actual local SpecNaacl calls target.step after each nonempty filtered rollout, despite ACCUMULATION_STEPS=4.",
+    "SpecNaacl excludes constant-reward groups from target only, uses population reward std without epsilon and retokenizes assistant messages; native NeMo keeps those samples and uses generated token masks. Their target denominator differs."
+  ],
+  "source_shas": {
+    "nemo-rl": {
+      "url": "https://github.com/MarkXCloud/RL",
+      "sha": "c18e462adf34739951b3d21773f436eaee324b31"
+    },
+    "vllm": {
+      "url": "https://github.com/vllm-project/vllm",
+      "sha": "752a3a504485790a2e8491cacbb35c137339ad34"
+    },
+    "original-dflash": {
+      "url": "https://github.com/z-lab/dflash",
+      "sha": "07ebd93db9f472af339b644bb70221ad8428328a"
+    },
+    "runtime": {
+      "flash-attn": "2.8.1+cu13torch2.10cxx11abitrue",
+      "ray": "2.56.1",
+      "torch": "2.11.0+cu130",
+      "transformer-engine": "2.15.0+42b8400",
+      "transformers": "5.12.1",
+      "triton": "3.6.0"
+    },
+    "python": "3.13",
+    "cuda": "13.0",
+    "vllm_version": "0.25.1",
+    "megatron_bridge_sha": "b11414c71b15e54d333eb49346ed199f20fa9021"
+  },
+  "entries": [
+    {
+      "parameter": "MODEL",
+      "SpecNaacl_source_file": "SpecNaacl/configs/_shared/b200_common.env",
+      "SpecNaacl_value": "/workspace/storage-shared/models/Qwen3-4B",
+      "DFlash_env": "MODEL",
+      "DFlash_resolved_key": "policy.model_name",
+      "effective_runtime_value": "/workspace/storage-shared/models/Qwen3-4B",
+      "status": "MATCH",
+      "reason": "Validated resolver maps this value into the actual runtime configuration."
+    },
+    {
+      "parameter": "BATCH_SIZE",
+      "SpecNaacl_source_file": "SpecNaacl/configs/_shared/b200_common.env",
+      "SpecNaacl_value": 8,
+      "DFlash_env": "BATCH_SIZE",
+      "DFlash_resolved_key": "grpo.num_prompts_per_step",
+      "effective_runtime_value": 8,
+      "status": "MATCH",
+      "reason": "Validated resolver maps this value into the actual runtime configuration."
+    },
+    {
+      "parameter": "RESPONSES_PER_PROMPT",
+      "SpecNaacl_source_file": "SpecNaacl/configs/_shared/b200_common.env",
+      "SpecNaacl_value": 8,
+      "DFlash_env": "RESPONSES_PER_PROMPT",
+      "DFlash_resolved_key": "grpo.num_generations_per_prompt",
+      "effective_runtime_value": 8,
+      "status": "MATCH",
+      "reason": "Validated resolver maps this value into the actual runtime configuration."
+    },
+    {
+      "parameter": "TRAIN_SUBSET_SEED",
+      "SpecNaacl_source_file": "SpecNaacl/configs/_shared/b200_common.env",
+      "SpecNaacl_value": 42,
+      "DFlash_env": "TRAIN_SUBSET_SEED",
+      "DFlash_resolved_key": "grpo.seed",
+      "effective_runtime_value": 42,
+      "status": "MATCH",
+      "reason": "Validated resolver maps this value into the actual runtime configuration."
+    },
+    {
+      "parameter": "TARGET_LR",
+      "SpecNaacl_source_file": "SpecNaacl/configs/_shared/b200_common.env",
+      "SpecNaacl_value": 1e-06,
+      "DFlash_env": "TARGET_LR",
+      "DFlash_resolved_key": "policy.megatron_cfg.optimizer.lr",
+      "effective_runtime_value": 1e-06,
+      "status": "MATCH",
+      "reason": "Validated resolver maps this value into the actual runtime configuration."
+    },
+    {
+      "parameter": "DRAFT_LR",
+      "SpecNaacl_source_file": "SpecNaacl/configs/_shared/b200_common.env",
+      "SpecNaacl_value": 0.0001,
+      "DFlash_env": "DRAFT_LR",
+      "DFlash_resolved_key": "policy.draft.lr",
+      "effective_runtime_value": 0.0001,
+      "status": "MATCH",
+      "reason": "Validated resolver maps this value into the actual runtime configuration."
+    },
+    {
+      "parameter": "TEMPERATURE",
+      "SpecNaacl_source_file": "SpecNaacl/configs/_shared/b200_common.env",
+      "SpecNaacl_value": 1.0,
+      "DFlash_env": "TEMPERATURE",
+      "DFlash_resolved_key": "policy.generation.temperature",
+      "effective_runtime_value": 1.0,
+      "status": "MATCH",
+      "reason": "Validated resolver maps this value into the actual runtime configuration."
+    },
+    {
+      "parameter": "TOP_P",
+      "SpecNaacl_source_file": "SpecNaacl/configs/_shared/b200_common.env",
+      "SpecNaacl_value": 0.95,
+      "DFlash_env": "TOP_P",
+      "DFlash_resolved_key": "policy.generation.top_p",
+      "effective_runtime_value": 0.95,
+      "status": "MATCH",
+      "reason": "Validated resolver maps this value into the actual runtime configuration."
+    },
+    {
+      "parameter": "GEN_MAX_LENGTH",
+      "SpecNaacl_source_file": "SpecNaacl/configs/_shared/b200_common.env",
+      "SpecNaacl_value": 2048,
+      "DFlash_env": "GEN_MAX_LENGTH",
+      "DFlash_resolved_key": "policy.generation.max_new_tokens",
+      "effective_runtime_value": 2048,
+      "status": "MATCH",
+      "reason": "Validated resolver maps this value into the actual runtime configuration."
+    },
+    {
+      "parameter": "MAX_PROMPT_LENGTH",
+      "SpecNaacl_source_file": "SpecNaacl/configs/_shared/b200_common.env",
+      "SpecNaacl_value": 2048,
+      "DFlash_env": "MAX_PROMPT_LENGTH",
+      "DFlash_resolved_key": "data.max_input_seq_length",
+      "effective_runtime_value": 2048,
+      "status": "MATCH",
+      "reason": "Validated resolver maps this value into the actual runtime configuration."
+    },
+    {
+      "parameter": "BETA",
+      "SpecNaacl_source_file": "SpecNaacl/configs/_shared/b200_common.env",
+      "SpecNaacl_value": 0.04,
+      "DFlash_env": "BETA",
+      "DFlash_resolved_key": "loss_fn.reference_policy_kl_penalty",
+      "effective_runtime_value": 0.04,
+      "status": "MATCH",
+      "reason": "Validated resolver maps this value into the actual runtime configuration."
+    },
+    {
+      "parameter": "EPSILON",
+      "SpecNaacl_source_file": "SpecNaacl/configs/_shared/b200_common.env",
+      "SpecNaacl_value": 0.1,
+      "DFlash_env": "EPSILON",
+      "DFlash_resolved_key": "loss_fn.ratio_clip_min",
+      "effective_runtime_value": 0.1,
+      "status": "MATCH",
+      "reason": "Validated resolver maps this value into the actual runtime configuration."
+    },
+    {
+      "parameter": "MAX_TRAIN_SAMPLES",
+      "SpecNaacl_source_file": "SpecNaacl/configs/_shared/b200_common.env",
+      "SpecNaacl_value": 0,
+      "DFlash_env": "MAX_TRAIN_SAMPLES",
+      "DFlash_resolved_key": "data.train.max_samples",
+      "effective_runtime_value": 0,
+      "status": "MATCH",
+      "reason": "Validated resolver maps this value into the actual runtime configuration."
+    },
+    {
+      "parameter": "ACCUMULATION_STEPS",
+      "SpecNaacl_source_file": "SpecNaacl/grpo_speculative.py:1535,1699,2041",
+      "SpecNaacl_value": 4,
+      "DFlash_env": "ACCUMULATION_STEPS",
+      "DFlash_resolved_key": "policy.train_micro_batch_size",
+      "effective_runtime_value": 1,
+      "status": "DIFFERENT_BY_DESIGN",
+      "reason": "Spec actual target.step is inside every nonempty rollout; ACCUMULATION_STEPS affects step label. DFlash uses this knob only as a physical microbatch cap."
+    },
+    {
+      "parameter": "EFFECTIVE_TARGET_BATCH",
+      "SpecNaacl_source_file": "SpecNaacl/grpo_speculative.py:1441,1535,1699",
+      "SpecNaacl_value": {
+        "nominal_requested": 256,
+        "actual": "8 times retained nonconstant-reward prompt groups per rollout"
+      },
+      "DFlash_env": "EFFECTIVE_TARGET_BATCH",
+      "DFlash_resolved_key": "policy.train_global_batch_size",
+      "effective_runtime_value": 64,
+      "status": "DIFFERENT_BY_DESIGN",
+      "reason": "Native NeMo includes constant-reward samples in the sequence/KL denominator. Four-rollout target accumulation is unsupported."
+    },
+    {
+      "parameter": "target_optimizer_cadence",
+      "SpecNaacl_source_file": "SpecNaacl/grpo_speculative.py:1364,1699",
+      "SpecNaacl_value": "target: each nonempty filtered rollout; draft/A: each trainable rollout",
+      "DFlash_env": "target_optimizer_cadence",
+      "DFlash_resolved_key": "nemo_bridge.after_optimizer_step",
+      "effective_runtime_value": "one successful joint step per rollout; A retains pending feedback on skipped steps",
+      "status": "DIFFERENT_BY_DESIGN",
+      "reason": "One update per cohort in normal execution; no fourfold reduction of A. Zero-reward filtering and overflow differ across frameworks."
+    },
+    {
+      "parameter": "draft_optimizer_cadence",
+      "SpecNaacl_source_file": "SpecNaacl/grpo_speculative.py:1364,1699",
+      "SpecNaacl_value": "target: each nonempty filtered rollout; draft/A: each trainable rollout",
+      "DFlash_env": "draft_optimizer_cadence",
+      "DFlash_resolved_key": "nemo_bridge.after_optimizer_step",
+      "effective_runtime_value": "one successful joint step per rollout; A retains pending feedback on skipped steps",
+      "status": "EQUIVALENT",
+      "reason": "One update per cohort in normal execution; no fourfold reduction of A. Zero-reward filtering and overflow differ across frameworks."
+    },
+    {
+      "parameter": "A_optimizer_cadence",
+      "SpecNaacl_source_file": "SpecNaacl/grpo_speculative.py:1364,1699",
+      "SpecNaacl_value": "target: each nonempty filtered rollout; draft/A: each trainable rollout",
+      "DFlash_env": "A_optimizer_cadence",
+      "DFlash_resolved_key": "nemo_bridge.after_optimizer_step",
+      "effective_runtime_value": "one successful joint step per rollout; A retains pending feedback on skipped steps",
+      "status": "EQUIVALENT",
+      "reason": "One update per cohort in normal execution; no fourfold reduction of A. Zero-reward filtering and overflow differ across frameworks."
+    },
+    {
+      "parameter": "TARGET_LORA_R",
+      "SpecNaacl_source_file": "SpecNaacl/grpo_speculative.py:738",
+      "SpecNaacl_value": 64,
+      "DFlash_env": "TARGET_LORA_R",
+      "DFlash_resolved_key": "policy.megatron_cfg.peft.enabled",
+      "effective_runtime_value": false,
+      "status": "UNSUPPORTED",
+      "reason": "Target LoRA: pinned nemo_rl/models/megatron/setup.py constructs Bridge LoRA on fused linear_qkv/linear_fc1. This shares input factors across Q/K/V and gate/up, unlike seven independent PEFT rank-64 adapters. Canonical injection, merged vLLM refit and checkpoint round-trip have not been integrated/validated."
+    },
+    {
+      "parameter": "TARGET_LORA_ALPHA",
+      "SpecNaacl_source_file": "SpecNaacl/grpo_speculative.py:738",
+      "SpecNaacl_value": 32,
+      "DFlash_env": "TARGET_LORA_ALPHA",
+      "DFlash_resolved_key": "policy.megatron_cfg.peft.enabled",
+      "effective_runtime_value": false,
+      "status": "UNSUPPORTED",
+      "reason": "Target LoRA: pinned nemo_rl/models/megatron/setup.py constructs Bridge LoRA on fused linear_qkv/linear_fc1. This shares input factors across Q/K/V and gate/up, unlike seven independent PEFT rank-64 adapters. Canonical injection, merged vLLM refit and checkpoint round-trip have not been integrated/validated."
+    },
+    {
+      "parameter": "TARGET_LORA_DROPOUT",
+      "SpecNaacl_source_file": "SpecNaacl/grpo_speculative.py:738",
+      "SpecNaacl_value": 0.0,
+      "DFlash_env": "TARGET_LORA_DROPOUT",
+      "DFlash_resolved_key": "policy.megatron_cfg.peft.enabled",
+      "effective_runtime_value": false,
+      "status": "UNSUPPORTED",
+      "reason": "Target LoRA: pinned nemo_rl/models/megatron/setup.py constructs Bridge LoRA on fused linear_qkv/linear_fc1. This shares input factors across Q/K/V and gate/up, unlike seven independent PEFT rank-64 adapters. Canonical injection, merged vLLM refit and checkpoint round-trip have not been integrated/validated."
+    },
+    {
+      "parameter": "TARGET_LORA_MODULES",
+      "SpecNaacl_source_file": "SpecNaacl/grpo_speculative.py:738",
+      "SpecNaacl_value": [
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "o_proj",
+        "gate_proj",
+        "up_proj",
+        "down_proj"
+      ],
+      "DFlash_env": "TARGET_LORA_MODULES",
+      "DFlash_resolved_key": "policy.megatron_cfg.peft.enabled",
+      "effective_runtime_value": false,
+      "status": "UNSUPPORTED",
+      "reason": "Target LoRA: pinned nemo_rl/models/megatron/setup.py constructs Bridge LoRA on fused linear_qkv/linear_fc1. This shares input factors across Q/K/V and gate/up, unlike seven independent PEFT rank-64 adapters. Canonical injection, merged vLLM refit and checkpoint round-trip have not been integrated/validated."
+    },
+    {
+      "parameter": "MAX_TRAINING_TOKEN",
+      "SpecNaacl_source_file": "SpecNaacl/helper/fastgrpo_training.py; SpecNaacl/grpo_speculative.py",
+      "SpecNaacl_value": "1024",
+      "DFlash_env": "MAX_TRAINING_TOKEN",
+      "DFlash_resolved_key": "policy.draft.anchors_per_seq / loss_seq_chunk_size",
+      "effective_runtime_value": null,
+      "status": "DIFFERENT_BY_DESIGN",
+      "reason": "Spec token/padding budgets pack variable draft states and target microbatches. DFlash uses block anchors/chunking; setting these legacy knobs is rejected."
+    },
+    {
+      "parameter": "MAX_TRAINING_PADDING_GAP",
+      "SpecNaacl_source_file": "SpecNaacl/helper/fastgrpo_training.py; SpecNaacl/grpo_speculative.py",
+      "SpecNaacl_value": "4096",
+      "DFlash_env": "MAX_TRAINING_PADDING_GAP",
+      "DFlash_resolved_key": "policy.draft.anchors_per_seq / loss_seq_chunk_size",
+      "effective_runtime_value": null,
+      "status": "DIFFERENT_BY_DESIGN",
+      "reason": "Spec token/padding budgets pack variable draft states and target microbatches. DFlash uses block anchors/chunking; setting these legacy knobs is rejected."
+    },
+    {
+      "parameter": "LOGPS_CHUNK_SIZE",
+      "SpecNaacl_source_file": "SpecNaacl/helper/fastgrpo_training.py; SpecNaacl/grpo_speculative.py",
+      "SpecNaacl_value": "256",
+      "DFlash_env": "LOGPS_CHUNK_SIZE",
+      "DFlash_resolved_key": "policy.draft.anchors_per_seq / loss_seq_chunk_size",
+      "effective_runtime_value": null,
+      "status": "DIFFERENT_BY_DESIGN",
+      "reason": "Spec token/padding budgets pack variable draft states and target microbatches. DFlash uses block anchors/chunking; setting these legacy knobs is rejected."
+    },
+    {
+      "parameter": "GRPO_ITERATION_NUM",
+      "SpecNaacl_source_file": "SpecNaacl/helper/fastgrpo_training.py; SpecNaacl/grpo_speculative.py",
+      "SpecNaacl_value": "1",
+      "DFlash_env": "GRPO_ITERATION_NUM",
+      "DFlash_resolved_key": "one joint epoch",
+      "effective_runtime_value": 1,
+      "status": "EQUIVALENT",
+      "reason": "Spec token/padding budgets pack variable draft states and target microbatches. DFlash uses block anchors/chunking; setting these legacy knobs is rejected."
+    },
+    {
+      "parameter": "KL_equation",
+      "SpecNaacl_source_file": "SpecNaacl/grpo_speculative.py; helper/fastgrpo_training.py; helper/get_QAs.py",
+      "SpecNaacl_value": "exp(ref-logp)-(ref-logp)-1",
+      "DFlash_env": "KL_equation",
+      "DFlash_resolved_key": "loss_fn.specnaacl_kl_gradient",
+      "effective_runtime_value": true,
+      "status": "MATCH",
+      "reason": "Spec objective removes NeMo score factor; sequence mean, unclamped k3. original_nemo explicitly preserves the previous loss instead."
+    },
+    {
+      "parameter": "clipping",
+      "SpecNaacl_source_file": "SpecNaacl/grpo_speculative.py; helper/fastgrpo_training.py; helper/get_QAs.py",
+      "SpecNaacl_value": "min(r*A, clamp(r,1-eps,1+eps)*A)",
+      "DFlash_env": "clipping",
+      "DFlash_resolved_key": "loss_fn.ratio_clip_min/max",
+      "effective_runtime_value": 0.1,
+      "status": "MATCH",
+      "reason": "Same clipped policy gradient; on-policy first/only iteration uses detached current logp."
+    },
+    {
+      "parameter": "reward",
+      "SpecNaacl_source_file": "SpecNaacl/grpo_speculative.py; helper/fastgrpo_training.py; helper/get_QAs.py",
+      "SpecNaacl_value": "accuracy + .2 format",
+      "DFlash_env": "reward",
+      "DFlash_resolved_key": "env.math.math_verify_impl",
+      "effective_runtime_value": "specnaacl",
+      "status": "MATCH",
+      "reason": "Same math-verify extraction and exact newline format rule; direct source parity tests."
+    },
+    {
+      "parameter": "reward_std",
+      "SpecNaacl_source_file": "SpecNaacl/grpo_speculative.py; helper/fastgrpo_training.py; helper/get_QAs.py",
+      "SpecNaacl_value": "numpy std ddof=0, no epsilon, drop constant target groups",
+      "DFlash_env": "reward_std",
+      "DFlash_resolved_key": "grpo.normalize_rewards",
+      "effective_runtime_value": "population std + epsilon; keep constant groups",
+      "status": "DIFFERENT_BY_DESIGN",
+      "reason": "Sample retention and target/KL denominator remain different."
+    },
+    {
+      "parameter": "prompt_format",
+      "SpecNaacl_source_file": "SpecNaacl/grpo_speculative.py; helper/fastgrpo_training.py; helper/get_QAs.py",
+      "SpecNaacl_value": "prompt_dict math and local chat template",
+      "DFlash_env": "prompt_format",
+      "DFlash_resolved_key": "data.default.processor",
+      "effective_runtime_value": "specnaacl",
+      "status": "MATCH",
+      "reason": "Exact template string and tokenizer template; real tokenizer/data unavailable."
+    },
+    {
+      "parameter": "response_mask",
+      "SpecNaacl_source_file": "SpecNaacl/grpo_speculative.py; helper/fastgrpo_training.py; helper/get_QAs.py",
+      "SpecNaacl_value": "retokenized completed assistant",
+      "DFlash_env": "response_mask",
+      "DFlash_resolved_key": "NeMo generated-token mask",
+      "effective_runtime_value": "generated tokens",
+      "status": "DIFFERENT_BY_DESIGN",
+      "reason": "Whitespace/stop-token/retokenization can differ."
+    },
+    {
+      "parameter": "dataset_rows",
+      "SpecNaacl_source_file": "SpecNaacl/grpo_speculative.py; helper/fastgrpo_training.py; helper/get_QAs.py",
+      "SpecNaacl_value": "",
+      "DFlash_env": "dataset_rows",
+      "DFlash_resolved_key": "data.train.data_path",
+      "effective_runtime_value": "/workspace/storage-shared/nlp/minhpn19/data/simplelr_abel_level3to5/train.parquet",
+      "status": "UNVERIFIED",
+      "reason": "Three local parsers and synthetic rows checked; configured production datasets absent."
+    },
+    {
+      "parameter": "target_weight_decay",
+      "SpecNaacl_source_file": "SpecNaacl/grpo_speculative.py; helper/fastgrpo_training.py; helper/get_QAs.py",
+      "SpecNaacl_value": 0.01,
+      "DFlash_env": "target_weight_decay",
+      "DFlash_resolved_key": "policy.megatron_cfg.optimizer.weight_decay",
+      "effective_runtime_value": 0.0,
+      "status": "DIFFERENT_BY_DESIGN",
+      "reason": "Spec torch AdamW default .01; native target keeps its original weight decay."
+    },
+    {
+      "parameter": "draft_loss",
+      "SpecNaacl_source_file": "SpecNaacl/grpo_speculative.py; helper/fastgrpo_training.py; helper/get_QAs.py",
+      "SpecNaacl_value": "FastGRPO hidden regression/logit loss",
+      "DFlash_env": "draft_loss",
+      "DFlash_resolved_key": "policy.draft",
+      "effective_runtime_value": "NVIDIA block distillation",
+      "status": "DIFFERENT_BY_DESIGN",
+      "reason": "Preserve the intended DFlash training algorithm."
+    },
+    {
+      "parameter": "dtype",
+      "SpecNaacl_source_file": "SpecNaacl/grpo_speculative.py; helper/fastgrpo_training.py; helper/get_QAs.py",
+      "SpecNaacl_value": "BF16 model / FP32 A,B",
+      "DFlash_env": "dtype",
+      "DFlash_resolved_key": "policy.precision",
+      "effective_runtime_value": "bfloat16 / FP32 A,B",
+      "status": "MATCH",
+      "reason": "Pinned production versions still require real integration validation."
+    },
+    {
+      "parameter": "GPU_count",
+      "SpecNaacl_source_file": "SpecNaacl/grpo_speculative.py; helper/fastgrpo_training.py; helper/get_QAs.py",
+      "SpecNaacl_value": 1,
+      "DFlash_env": "GPU_count",
+      "DFlash_resolved_key": "cluster.gpus_per_node",
+      "effective_runtime_value": 1,
+      "status": "MATCH",
+      "reason": "Single colocated engine enforced for shared B."
+    },
+    {
+      "parameter": "checkpoint_resume",
+      "SpecNaacl_source_file": "SpecNaacl/grpo_speculative.py; helper/fastgrpo_training.py; helper/get_QAs.py",
+      "SpecNaacl_value": "full trainer optimizer, projector, RNG",
+      "DFlash_env": "checkpoint_resume",
+      "DFlash_resolved_key": "checkpointing.save_optimizer",
+      "effective_runtime_value": true,
+      "status": "UNVERIFIED",
+      "reason": "Synthetic state/resume tests pass; production distributed optimizer restore untested."
+    },
+    {
+      "parameter": "trainable_projector",
+      "SpecNaacl_source_file": "SpecNaacl/grpo_speculative.py; helper/fastgrpo_training.py; helper/get_QAs.py",
+      "SpecNaacl_value": true,
+      "DFlash_env": "trainable_projector",
+      "DFlash_resolved_key": "OPD_TRAIN_PROJECTOR",
+      "effective_runtime_value": true,
+      "status": "MATCH",
+      "reason": "Reflex preflight rejects frozen A; versioned AdamW state persisted."
+    },
+    {
+      "parameter": "shared_B",
+      "SpecNaacl_source_file": "SpecNaacl/grpo_speculative.py; helper/fastgrpo_training.py; helper/get_QAs.py",
+      "SpecNaacl_value": "one generation cohort",
+      "DFlash_env": "shared_B",
+      "DFlash_resolved_key": "vllm_runtime.Adapter",
+      "effective_runtime_value": "cohort shared and reset",
+      "status": "MATCH",
+      "reason": "Engine pool resets B, retains A; tested with dynamic request ordering."
+    },
+    {
+      "parameter": "total_training_steps",
+      "SpecNaacl_source_file": "SpecNaacl/grpo_speculative.py; helper/fastgrpo_training.py; helper/get_QAs.py",
+      "SpecNaacl_value": 0,
+      "DFlash_env": "total_training_steps",
+      "DFlash_resolved_key": "grpo.max_num_steps",
+      "effective_runtime_value": 1000000,
+      "status": "DIFFERENT_BY_DESIGN",
+      "reason": "Spec launcher forwards CLI overrides; parser default 0 is unbounded. DFlash caps native step count and epochs. Compare actual optimizer steps and generated trajectories."
+    },
+    {
+      "parameter": "save_interval",
+      "SpecNaacl_source_file": "SpecNaacl/grpo_speculative.py; helper/fastgrpo_training.py; helper/get_QAs.py",
+      "SpecNaacl_value": 100,
+      "DFlash_env": "save_interval",
+      "DFlash_resolved_key": "checkpointing.save_period",
+      "effective_runtime_value": 10,
+      "status": "DIFFERENT_BY_DESIGN",
+      "reason": "Checkpoint formats and step labels differ."
+    },
+    {
+      "parameter": "OPD_PROJECTOR_WEIGHT_DECAY",
+      "SpecNaacl_source_file": "SpecNaacl/helper/opd_optimizer.py",
+      "SpecNaacl_value": 0.01,
+      "DFlash_env": "OPD_PROJECTOR_WEIGHT_DECAY",
+      "DFlash_resolved_key": "ReflexConfig.projector_weight_decay",
+      "effective_runtime_value": 0.0,
+      "status": "DIFFERENT_BY_DESIGN",
+      "reason": "Spec torch AdamW default .01 applies to A. Existing DFlash projector default 0 is preserved and overrideable."
+    },
+    {
+      "parameter": "generation_seed",
+      "SpecNaacl_source_file": "SpecNaacl/scripts/launch/train_model.sh:183",
+      "SpecNaacl_value": 42,
+      "DFlash_env": "generation_seed",
+      "DFlash_resolved_key": "VllmGenerationWorker.llm_kwargs.seed",
+      "effective_runtime_value": 42,
+      "status": "MATCH",
+      "reason": "Patched engine initialization uses the shared experiment seed instead of a node/bundle index."
+    },
+    {
+      "parameter": "tokenizer_identity",
+      "SpecNaacl_source_file": "SpecNaacl/configs/_shared/b200_common.env",
+      "SpecNaacl_value": "/workspace/storage-shared/models/Qwen3-4B",
+      "DFlash_env": "tokenizer_identity",
+      "DFlash_resolved_key": "policy.tokenizer.name",
+      "effective_runtime_value": "/workspace/storage-shared/models/Qwen3-4B",
+      "status": "UNVERIFIED",
+      "reason": "Same configured model path; tokenizer files are absent in this environment."
+    },
+    {
+      "parameter": "training_epochs",
+      "SpecNaacl_source_file": "SpecNaacl/configs/_shared/b200_common.env",
+      "SpecNaacl_value": 1,
+      "DFlash_env": "training_epochs",
+      "DFlash_resolved_key": "grpo.max_num_epochs",
+      "effective_runtime_value": 1,
+      "status": "MATCH",
+      "reason": "Same epoch limit does not guarantee the same retained samples or optimizer count."
+    },
+    {
+      "parameter": "total_generated_training_tokens",
+      "SpecNaacl_source_file": "SpecNaacl/configs/_shared/b200_common.env",
+      "SpecNaacl_value": null,
+      "DFlash_env": "total_generated_training_tokens",
+      "DFlash_resolved_key": "metrics.jsonl.iter_generated_tokens",
+      "effective_runtime_value": null,
+      "status": "UNVERIFIED",
+      "reason": "Must sum actual emitted tokens at runtime; max_steps times max_response_length is not an observed token budget."
+    },
+    {
+      "parameter": "METHOD",
+      "SpecNaacl_source_file": "SpecNaacl/configs/_shared/b200_common.env",
+      "SpecNaacl_value": "opd_reflex",
+      "DFlash_env": "METHOD",
+      "DFlash_resolved_key": "METHOD",
+      "effective_runtime_value": "dflash_reflex",
+      "status": "EQUIVALENT",
+      "reason": "Baseline and Reflex are paired within each framework; native target adaptation remains different."
+    },
+    {
+      "parameter": "OPD_RANK",
+      "SpecNaacl_source_file": "SpecNaacl/configs/_shared/b200_common.env",
+      "SpecNaacl_value": "8",
+      "DFlash_env": "OPD_RANK",
+      "DFlash_resolved_key": "ReflexConfig.rank",
+      "effective_runtime_value": "8",
+      "status": "MATCH",
+      "reason": "Validated resolver maps this value into the actual runtime configuration."
+    },
+    {
+      "parameter": "OPD_TOPK",
+      "SpecNaacl_source_file": "SpecNaacl/configs/_shared/b200_common.env",
+      "SpecNaacl_value": "16",
+      "DFlash_env": "OPD_TOPK",
+      "DFlash_resolved_key": "ReflexConfig.topk",
+      "effective_runtime_value": "16",
+      "status": "MATCH",
+      "reason": "Validated resolver maps this value into the actual runtime configuration."
+    },
+    {
+      "parameter": "OPD_FAST_LR",
+      "SpecNaacl_source_file": "SpecNaacl/configs/_shared/b200_common.env",
+      "SpecNaacl_value": "0.01",
+      "DFlash_env": "OPD_FAST_LR",
+      "DFlash_resolved_key": "ReflexConfig.fast_lr",
+      "effective_runtime_value": "0.01",
+      "status": "MATCH",
+      "reason": "Validated resolver maps this value into the actual runtime configuration."
+    },
+    {
+      "parameter": "OPD_PROJECTOR_LR",
+      "SpecNaacl_source_file": "SpecNaacl/configs/_shared/b200_common.env",
+      "SpecNaacl_value": "1e-4",
+      "DFlash_env": "OPD_PROJECTOR_LR",
+      "DFlash_resolved_key": "ReflexConfig.projector_lr",
+      "effective_runtime_value": "1e-4",
+      "status": "MATCH",
+      "reason": "Validated resolver maps this value into the actual runtime configuration."
+    },
+    {
+      "parameter": "OPD_ACCEPTED_WEIGHT",
+      "SpecNaacl_source_file": "SpecNaacl/configs/_shared/b200_common.env",
+      "SpecNaacl_value": "1.0",
+      "DFlash_env": "OPD_ACCEPTED_WEIGHT",
+      "DFlash_resolved_key": "ReflexConfig.accepted_weight",
+      "effective_runtime_value": "1.0",
+      "status": "MATCH",
+      "reason": "Validated resolver maps this value into the actual runtime configuration."
+    },
+    {
+      "parameter": "OPD_REJECTED_WEIGHT",
+      "SpecNaacl_source_file": "SpecNaacl/configs/_shared/b200_common.env",
+      "SpecNaacl_value": "1.0",
+      "DFlash_env": "OPD_REJECTED_WEIGHT",
+      "DFlash_resolved_key": "ReflexConfig.rejected_weight",
+      "effective_runtime_value": "1.0",
+      "status": "MATCH",
+      "reason": "Validated resolver maps this value into the actual runtime configuration."
+    },
+    {
+      "parameter": "OPD_UPDATE_INTERVAL",
+      "SpecNaacl_source_file": "SpecNaacl/configs/_shared/b200_common.env",
+      "SpecNaacl_value": "1",
+      "DFlash_env": "OPD_UPDATE_INTERVAL",
+      "DFlash_resolved_key": "ReflexConfig.update_interval",
+      "effective_runtime_value": "1",
+      "status": "MATCH",
+      "reason": "Validated resolver maps this value into the actual runtime configuration."
+    }
+  ],
+  "resolved_DFlash": {
+    "defaults": "/mnt/hdd/nhatminh/SpecDecode/dflash/third_party/nemo-rl/examples/configs/grpo_math_1B_megatron.yaml",
+    "grpo": {
+      "num_prompts_per_step": 8,
+      "num_generations_per_prompt": 8,
+      "max_num_epochs": 1,
+      "max_num_steps": 1000000,
+      "seed": 42,
+      "val_at_start": false,
+      "val_at_end": false,
+      "val_period": 0,
+      "normalize_rewards": true,
+      "use_leave_one_out_baseline": false,
+      "use_dynamic_sampling": false,
+      "async_grpo": {
+        "enabled": false
+      }
+    },
+    "loss_fn": {
+      "reference_policy_kl_penalty": 0.04,
+      "ratio_clip_min": 0.1,
+      "ratio_clip_max": 0.1,
+      "force_on_policy_ratio": true,
+      "token_level_loss": false,
+      "reference_policy_kl_type": "k3",
+      "kl_input_clamp_value": null,
+      "kl_output_clamp_value": null,
+      "specnaacl_kl_gradient": true
+    },
+    "policy": {
+      "model_name": "/workspace/storage-shared/models/Qwen3-4B",
+      "train_global_batch_size": 64,
+      "train_micro_batch_size": 1,
+      "logprob_batch_size": 1,
+      "max_total_sequence_length": 4112,
+      "precision": "bfloat16",
+      "make_sequence_length_divisible_by": 1,
+      "tokenizer": {
+        "name": "/workspace/storage-shared/models/Qwen3-4B",
+        "chat_template": "default"
+      },
+      "sequence_packing": {
+        "enabled": false
+      },
+      "dynamic_batching": {
+        "enabled": false
+      },
+      "megatron_cfg": {
+        "tensor_model_parallel_size": 1,
+        "pipeline_model_parallel_size": 1,
+        "context_parallel_size": 1,
+        "sequence_parallel": false,
+        "activation_checkpointing": true,
+        "empty_unused_memory_level": 1,
+        "optimizer": {
+          "lr": 1e-06,
+          "min_lr": 1e-06,
+          "weight_decay": 0.0
+        },
+        "scheduler": {
+          "lr_warmup_iters": 0,
+          "lr_warmup_init": 1e-06
+        }
+      },
+      "draft": {
+        "enabled": true,
+        "speculator_type": "dflash",
+        "model_name": "/mnt/hdd/nhatminh/SpecDecode/dflash/outputs/pretrain/qwen3_4b/latest_checkpoint",
+        "gamma": 15,
+        "mask_token_id": 151669,
+        "anchors_per_seq": 16,
+        "anchor_from_generation_only": true,
+        "loss_weight": 0.1,
+        "loss_weighting": "exp",
+        "loss_seq_chunk_size": 32,
+        "lr": 0.0001,
+        "min_lr": 0.0001,
+        "weight_decay": 0.0
+      },
+      "generation": {
+        "backend": "vllm",
+        "max_new_tokens": 2048,
+        "temperature": 1.0,
+        "top_p": 0.95,
+        "top_k": null,
+        "colocated": {
+          "enabled": true
+        },
+        "vllm_cfg": {
+          "async_engine": false,
+          "tensor_parallel_size": 1,
+          "pipeline_parallel_size": 1,
+          "expert_parallel_size": 1,
+          "use_tqdm": false,
+          "enable_vllm_metrics_logger": false,
+          "gpu_memory_utilization": 0.65,
+          "logprobs_mode": "raw_logprobs"
+        },
+        "vllm_kwargs": {
+          "async_scheduling": false,
+          "max_num_seqs": 64,
+          "speculative_config": {
+            "method": "dflash",
+            "model": "/mnt/hdd/nhatminh/SpecDecode/dflash/outputs/pretrain/qwen3_4b/latest_checkpoint",
+            "num_speculative_tokens": 15,
+            "draft_sample_method": "greedy"
+          }
+        }
+      }
+    },
+    "data": {
+      "max_input_seq_length": 2048,
+      "num_workers": 0,
+      "train": {
+        "dataset_name": "dflash_reflex.nemo_data.LocalMathDataset",
+        "dataset": "simplelr",
+        "data_path": "/workspace/storage-shared/nlp/minhpn19/data/simplelr_abel_level3to5/train.parquet",
+        "model_path": "/workspace/storage-shared/models/Qwen3-4B",
+        "max_prompt_length": 2048,
+        "max_samples": 0,
+        "seed": 42
+      },
+      "validation": null,
+      "default": {
+        "processor": "specnaacl",
+        "env_name": "math",
+        "prompt_file": null,
+        "system_prompt_file": null
+      }
+    },
+    "env": {
+      "math": {
+        "num_workers": 8,
+        "math_verify_impl": "specnaacl"
+      }
+    },
+    "logger": {
+      "log_dir": "/mnt/hdd/nhatminh/SpecDecode/dflash/outputs/config-comparison/logs/upstream",
+      "wandb_enabled": false,
+      "tensorboard_enabled": false,
+      "monitor_gpus": false
+    },
+    "checkpointing": {
+      "enabled": true,
+      "checkpoint_dir": "/mnt/hdd/nhatminh/SpecDecode/dflash/outputs/config-comparison/checkpoints/resume",
+      "save_period": 10,
+      "metric_name": "train:reward",
+      "keep_top_k": 1,
+      "save_optimizer": true
+    },
+    "cluster": {
+      "gpus_per_node": 1,
+      "num_nodes": 1
+    }
+  }
+}

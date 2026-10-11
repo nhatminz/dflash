@@ -86,3 +86,78 @@ def test_skipped_iteration_keeps_latest_completed_global_step(tmp_path, monkeypa
     rows = [json.loads(line) for line in (tmp_path / "logs/metrics.jsonl").read_text().splitlines()]
     assert [row["global_step"] for row in rows] == [4, 4, 5]
     assert [row["iteration"] for row in rows] == [1, 2, 3]
+
+
+def test_production_missing_metrics_remain_null_on_resume(tmp_path):
+    import json
+
+    import torch
+
+    from dflash_reflex.metrics import Metrics
+
+    packet = dict(
+        counters=torch.zeros(8),
+        generated_tokens=5,
+        generation_time_s=0.1,
+        updates=0,
+        profile_ms={},
+        core_metrics_available=False,
+    )
+    m = Metrics(tmp_path, "dflash", "simplelr")
+    row = m.record(0, 1, [packet], {}, wall=0.2)
+    assert row["iter_aal"] is row["iter_verification_rounds"] is None
+    m.finalize()
+    summary = json.loads((tmp_path / "summary.json").read_text())
+    assert summary["aal"] is summary["total_verification_rounds"] is None
+    state = dict(m.state)
+    resumed = Metrics(tmp_path, "dflash", "simplelr", state)
+    packet["core_metrics_available"] = True
+    packet["counters"] = torch.tensor([5, 1, 4, 15, 0, 0, 0, 0])
+    row = resumed.record(0, 2, [packet], {}, wall=0.2)
+    assert row["iter_aal"] == 5 and row["cumulative_aal"] is None
+
+
+def test_fused_profiling_does_not_invent_separate_normalization_or_refit_times(tmp_path):
+    import json
+
+    packet = dict(
+        counters=torch.tensor([5, 1, 4, 15, 2, 0.6, 0.2, 2]),
+        generated_tokens=5,
+        generation_time_s=0.1,
+        updates=1,
+        profile_ms=dict(corrected_argmax_ms=2.0, topk_union_ms=3.0, union_kl_ms=0.5),
+    )
+    m = Metrics(tmp_path, "dflash_reflex", "simplelr")
+    row = m.record(0, 1, [packet], {"prepare_for_generation/total": 0.01}, wall=0.2)
+    assert row["opd_correction_time_s"] == 0.002
+    record = json.loads((tmp_path / "logs/metrics.jsonl").read_text())
+    assert record["profile_ms"]["weight_sync_ms"] == 10.0
+    assert record["profile_ms"]["feedback_normalization_ms"] is None
+    assert record["profile_ms"]["weight_refit_ms"] is None
+
+
+def test_production_resume_wall_includes_startup_and_completed_session_drain(tmp_path, monkeypatch):
+    from dflash_reflex import metrics
+
+    tick = [10.0]  # Model/Ray setup has already consumed ten seconds.
+    monkeypatch.setattr(metrics.time, "perf_counter", lambda: tick[0])
+    packet = dict(
+        counters=torch.zeros(8),
+        generated_tokens=5,
+        generation_time_s=1.0,
+        updates=0,
+        profile_ms={},
+        core_metrics_available=False,
+    )
+    first = metrics.Metrics(tmp_path, "dflash", "simplelr", wall_start=0.0)
+    tick[0] = 12.0
+    first.record(0, 1, [packet], {}, wall=2.0)
+    committed = dict(first.state)
+    tick[0] = 15.0
+    first.finalize()  # Completes the same committed iteration, with null rounds.
+    tick[0] = 100.0
+    resumed = metrics.Metrics(tmp_path, "dflash", "simplelr", committed, wall_start=98.0)
+    tick[0] = 105.0
+    row = resumed.record(0, 2, [packet], {}, wall=5.0)
+    assert row["cumulative_wall_time_s"] == 22.0  # 15 + 2 setup + 5 iteration.
+    assert row["cumulative_aal"] is None

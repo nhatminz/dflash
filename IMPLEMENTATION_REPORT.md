@@ -6,6 +6,37 @@ và GRPO đã được triển khai bằng model/loss NVIDIA và proposer/verifi
 chạy end-to-end NeMo/Megatron/vLLM trên B200**: máy hiện tại thiếu runtime
 CUDA 13 và các model/dataset ở shared storage. Không có kết luận speedup GRPO.
 
+
+## Cập nhật correctness/fairness cuối
+
+Mặc định mới `FAIRNESS_PROFILE=specnaacl_matched` sẽ **dừng preflight** với backend
+đã pin: LoRA QKV/gate-up gộp không tương đương bảy adapter PEFT độc lập; chưa có
+cadence target bốn cohort độc lập với draft/A; và cách lọc nhóm reward/mask khác.
+Không coi profile này là cấu hình chạy thành công. Để thực hiện các lệnh native
+trong tài liệu, đặt rõ:
+
+```bash
+export FAIRNESS_PROFILE=native_dflash
+export METRICS_MODE=production
+```
+
+Native vẫn train target đầy đủ, nên chỉ so baseline/Reflex trong cùng profile,
+không kết luận tương đương hoàn toàn SpecNaacl. `BETA=.04`, `EPSILON=.1` đã đi vào
+loss thật; sequence mean và gradient k3 đã đối chiếu trực tiếp với loss Spec.
+Đọc [báo cáo cuối](validation/final_reflex_optimization_report.md) và
+[ma trận fairness](validation/fairness_config_matrix.json) trước khi chạy B200.
+
+Code SpecNaacl hiện tại cập nhật target sau mỗi rollout có nhóm reward biến thiên,
+rồi xóa batch. `ACCUMULATION_STEPS=4` không tạo bốn-rollout readiness; bảng nominal
+256 response trong prompt khác hành vi nguồn hiện tại. Draft/A vẫn cập nhật mỗi
+rollout thành công; A dùng gradient OPD, B shared trong cohort và reset giữa cohort.
+
+Đo tốc độ: dùng production cho cả hai method. Đo AAL: dùng instrumented cho cả hai.
+Baseline production không thu AAL; log null, không giả số 0. Profile/diagnostics
+là lần chạy riêng. Để tái hiện objective NeMo cũ hoặc resume checkpoint cũ, thêm
+`GRPO_OBJECTIVE=original_nemo BETA=0 EPSILON=.2` và giữ nguyên các overrides cũ.
+Nếu có khác biệt bất tương thích, preflight báo lỗi, không xóa checkpoint.
+
 ## 1. Cây thư mục mới
 
 ```text
@@ -357,3 +388,13 @@ method, OPD hyperparameters, model/tokenizer hoặc dataset khi resume.
 Đây là các giới hạn xác nhận được, không được thay bằng placeholder hoặc
 metric giả. Các đường production đã có code thực và lệnh chạy; vẫn cần
 qualification end-to-end trên máy có runtime/model/data đúng trước run dài.
+
+## Báo cáo tối ưu cuối
+
+Artifacts mới: `validation/final_reflex_optimization_report.md/.json`,
+`fairness_config_matrix.json`, `benchmark_before_after.json`,
+`dispatch_cache_rtx3090_v2.json`, `final_pytest.xml`.
+Báo cáo cuối thay thế số đo/heuristic trong các mục triển khai trước đó.
+Bản kernel cũ đã giữ trong `tests/reference/`; SpecNaacl được checksum trước/sau.
+Không thay pins hoặc cài thay production dependencies. Các kiểm thử mới chạy
+kernel thực, loss NeMo thực qua AST và sampler thực qua AST; chưa chạy engine thật.

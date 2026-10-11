@@ -1,4 +1,4 @@
-"""Local datasets and chat formatting, equivalent to SpecNaacl."""
+"""Local datasets with SpecNaacl question, answer and chat formatting rules."""
 
 import json
 import math
@@ -21,8 +21,10 @@ PATHS = dict(
 
 
 def select_subset(rows, max_samples=0, seed=42, fraction=1.0):
+    if fraction <= 0 or not math.isfinite(fraction):
+        raise ValueError("fraction must be finite and positive")
     target = len(rows) if fraction >= 1 else max(1, math.ceil(len(rows) * fraction))
-    if max_samples:
+    if max_samples > 0:
         target = min(target, max_samples)
     indices = list(range(len(rows)))
     random.Random(seed).shuffle(indices)
@@ -60,7 +62,9 @@ def load_questions(path, dataset, max_samples=0, seed=42):
             answer = item["reward_model"]["ground_truth"]
         if answer is None:
             raise ValueError("dataset row has no mathematical ground truth")
-        answer = str(answer).split("####")[-1].strip()
+        if "####" in str(answer):
+            answer = str(answer).split("####")[-1].strip()
+        answer = str(answer)
         if "\\boxed{" not in answer:
             answer = f"\\boxed{{{answer}}}"
         if not isinstance(question, str):

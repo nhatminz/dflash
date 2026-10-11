@@ -104,3 +104,36 @@ and was used only for CPU contracts, the original tiny HF DFlash model, and
 actual Triton/rejection-kernel tests. Reproduce these with a separate compatible
 Torch environment, `pytest`, Transformers 4.57.1, math-verify, pandas/pyarrow,
 OmegaConf/Hydra and matplotlib; do not mistake this for a supported NeMo runtime.
+
+## Final validation and compatibility
+
+The optimization audit retains every pinned production dependency. Development
+validation uses `.venv-test` (Python 3.12, Torch 2.4.1/CUDA 12.1, Triton 3.0)
+on RTX 3090; it does not certify the production CUDA-13 stack. The new
+`reference_qwen3_4b_config.json` records the official Qwen3-4B geometry (H=2560,
+V=151936); the benchmark accepts `--model-config` to read your actual local file.
+
+`FAIRNESS_PROFILE=specnaacl_matched` fails before loading models because the
+pinned joint backend is not cross-framework equivalent. Use the explicit
+`native_dflash` profile for actual training. See the final report for native,
+strict matched failure, paired measurement, and old-checkpoint commands.
+
+Regenerate and check managed patches after fetching dependencies:
+
+```bash
+.venv/bin/python scripts/fetch_sources.py
+.venv/bin/python scripts/patch_upstream.py
+```
+
+Installed vLLM wheel hooks also changed. Reapply them in the vLLM environment:
+
+```bash
+PYTHONPATH="$PWD" .venv-vllm/bin/python scripts/patch_upstream.py --vllm-installed
+```
+
+The patcher migrates the exact previously shipped hooks in place, with a
+regression test against `tests/reference/vllm_legacy.patch`. It refuses
+unrecognized source contexts; do not overwrite unrelated dependency changes. Source snapshots under
+`patches/` are regenerated from the pinned checkouts. Runtime sidecars and
+projector optimizer state remain compatible; old native loss settings require
+`GRPO_OBJECTIVE=original_nemo BETA=0 EPSILON=.2` with the original batch settings.

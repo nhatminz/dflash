@@ -1,5 +1,5 @@
 diff --git a/nemo_rl/algorithms/grpo.py b/nemo_rl/algorithms/grpo.py
-index 66ec0b5..d925a98 100644
+index 66ec0b5..f1cbc4c 100644
 --- a/nemo_rl/algorithms/grpo.py
 +++ b/nemo_rl/algorithms/grpo.py
 @@ -3002,7 +3002,8 @@ def grpo_train(
@@ -30,7 +30,7 @@ index 66ec0b5..d925a98 100644
              )
  
 +            from dflash_reflex.nemo_bridge import record_iteration
-+            record_iteration(total_steps + 1, timing_metrics, metrics)
++            record_iteration(total_steps + 1, timing_metrics, dict(metrics, reward=float(rewards.float().mean())))
              # Reset the batch and set dynamic_sampling_num_gen_batches to 0
              batch_cache = None
              dynamic_sampling_num_gen_batches = 0
@@ -47,6 +47,90 @@ index 66ec0b5..d925a98 100644
  
                          # Record last-successful-checkpoint time/step for external
                          # monitoring (see _write_latest_checkpoint_status).
+diff --git a/nemo_rl/algorithms/loss/loss_functions.py b/nemo_rl/algorithms/loss/loss_functions.py
+index 77b93cb..2558039 100755
+--- a/nemo_rl/algorithms/loss/loss_functions.py
++++ b/nemo_rl/algorithms/loss/loss_functions.py
+@@ -451,6 +451,8 @@ class BlockDraftLossFn(LossFunction):
+ class ClippedPGLossConfig(BaseModel, extra="allow"):
+     # --- Loss type ---
+     disable_ppo_ratio: bool = False
++    # Preserve the k3 gradient used by SpecNaacl (no score factor).
++    specnaacl_kl_gradient: bool = False
+     token_level_loss: bool = True
+     # If True, apply the off-policy importance-sampling correction at the
+     # sequence level (one weight per generated sample), as in GSPO.
+@@ -594,6 +596,7 @@ class ClippedPGLossFn(LossFunction):
+             cfg.truncated_importance_sampling_ratio_min
+         )
+         self.use_on_policy_kl_approximation = cfg.use_on_policy_kl_approximation
++        self.specnaacl_kl_gradient = cfg.specnaacl_kl_gradient
+         self.force_on_policy_ratio = cfg.force_on_policy_ratio  # Force ratio to 1.0
+ 
+         # Whether to compute importance weights per-sequence instead of per-token.
+@@ -814,33 +817,38 @@ class ClippedPGLossFn(LossFunction):
+             # - For importance weights, we also use unfiltered curr_logprobs_unfiltered since we're
+             #   reweighting samples from π_gen_filtered to π_curr_unfiltered
+ 
+-            # On-policy KL approximation
+-            # KL samples come from the optimized policy, so the KL loss must include
+-            # the score-function gradient through the sampling probability; see
+-            # https://arxiv.org/abs/2506.09477v1. In the non-IS case,
+-            # exp(x - x.detach()) has forward value 1 while preserving that gradient.
+-            if self.use_on_policy_kl_approximation:
+-                # See: docs/guides/grpo.md#on-policy-kl-approximation
+-                kl_importance_weights = torch.exp(
+-                    curr_logprobs_unfiltered - generation_logprobs
+-                )
++            if self.specnaacl_kl_gradient:
++                from dflash_reflex.grpo_loss import specnaacl_kl_terms
++                kl = self.reference_policy_kl_penalty * specnaacl_kl_terms(
++                    curr_logprobs_unfiltered, reference_policy_logprobs)
+             else:
+-                kl_importance_weights = torch.exp(
+-                    curr_logprobs_unfiltered - curr_logprobs_unfiltered.detach()
++                # On-policy KL approximation
++                # KL samples come from the optimized policy, so the KL loss must include
++                # the score-function gradient through the sampling probability; see
++                # https://arxiv.org/abs/2506.09477v1. In the non-IS case,
++                # exp(x - x.detach()) has forward value 1 while preserving that gradient.
++                if self.use_on_policy_kl_approximation:
++                    # See: docs/guides/grpo.md#on-policy-kl-approximation
++                    kl_importance_weights = torch.exp(
++                        curr_logprobs_unfiltered - generation_logprobs
++                    )
++                else:
++                    kl_importance_weights = torch.exp(
++                        curr_logprobs_unfiltered - curr_logprobs_unfiltered.detach()
++                    )
++                kl_importance_weights = torch.nan_to_num(
++                    kl_importance_weights, nan=0.0, posinf=0.0, neginf=0.0
+                 )
+-            kl_importance_weights = torch.nan_to_num(
+-                kl_importance_weights, nan=0.0, posinf=0.0, neginf=0.0
+-            )
+ 
+-            # Compute KL loss
+-            kl = self.reference_policy_kl_penalty * calculate_kl(
+-                logprobs=curr_logprobs_unfiltered,
+-                logprobs_reference=reference_policy_logprobs,
+-                kl_type=self.reference_policy_kl_type,
+-                input_clamp_value=self.kl_input_clamp_value,
+-                output_clamp_value=self.kl_output_clamp_value,
+-                importance_sampling_weights=kl_importance_weights,
+-            )
++                # Compute KL loss
++                kl = self.reference_policy_kl_penalty * calculate_kl(
++                    logprobs=curr_logprobs_unfiltered,
++                    logprobs_reference=reference_policy_logprobs,
++                    kl_type=self.reference_policy_kl_type,
++                    input_clamp_value=self.kl_input_clamp_value,
++                    output_clamp_value=self.kl_output_clamp_value,
++                    importance_sampling_weights=kl_importance_weights,
++                )
+ 
+             # Reduce KL loss
+             if self.loss_type == LossType.TOKEN_LEVEL:
 diff --git a/nemo_rl/environments/math_environment.py b/nemo_rl/environments/math_environment.py
 index e453f3b..8551a5a 100644
 --- a/nemo_rl/environments/math_environment.py
@@ -65,9 +149,18 @@ index e453f3b..8551a5a 100644
                          reward_dict = dapo_math_verify(response, ground_truth)
                          ret_score = reward_dict["score"]
 diff --git a/nemo_rl/models/generation/vllm/vllm_worker.py b/nemo_rl/models/generation/vllm/vllm_worker.py
-index ba9ad5f..fe13b9e 100644
+index ba9ad5f..67ef0e7 100644
 --- a/nemo_rl/models/generation/vllm/vllm_worker.py
 +++ b/nemo_rl/models/generation/vllm/vllm_worker.py
+@@ -690,7 +690,7 @@ class BaseVllmGenerationWorker:
+             gpu_memory_utilization=self.gpu_memory_utilization,
+             enable_prefix_caching=_resolve_enable_prefix_caching(self.cfg["vllm_cfg"]),
+             dtype=self.precision,
+-            seed=seed,
++            seed=int(os.environ["TRAIN_SUBSET_SEED"]),
+             enforce_eager=self.cfg["vllm_cfg"]["enforce_eager"],
+             max_model_len=self.cfg["vllm_cfg"]["max_model_len"],
+             trust_remote_code=True,
 @@ -1043,7 +1043,8 @@ class VllmGenerationWorkerImpl(VllmCheckpointEngineRpcMixin, BaseVllmGenerationW
          # Convert inputs to vLLM format and generate outputs.
          prompts = format_prompt_for_vllm_generation(data)

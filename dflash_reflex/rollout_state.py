@@ -13,6 +13,7 @@ class RequestSlot:
 
 
 class CohortState:
+    @torch.inference_mode(False)
     def __init__(self, group_id, capacity, width, hidden, rank, topk, device, dtype):
         self.group_id = str(group_id)
         self.capacity, self.width = capacity, width

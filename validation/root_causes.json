@@ -1,0 +1,26 @@
+[
+  {
+    "file": "kernels.py::propose",
+    "cause": "Top-k and exp normalization on every greedy proposal slot; dispatch uses growing host upper bound."
+  },
+  {
+    "file": "kernels.py::_target_q",
+    "cause": "Reconstructs logits by a different reduction and omits model logit processing instead of using actual proposal logits."
+  },
+  {
+    "file": "kernels.py::feedback",
+    "cause": "Teacher top-k on zero-weight post-rejection rows; KL can overflow when q underflows."
+  },
+  {
+    "file": "vllm_runtime.py",
+    "cause": "Baseline allocates GPU acceptance/counters and invokes wrappers even in production; deferred q needs explicit version guard."
+  },
+  {
+    "file": "prepare_run.py",
+    "cause": "KL=0 clip=.2 full target training differs from PEFT SpecNaacl; accumulation variable only changes physical microbatch."
+  },
+  {
+    "file": "SpecNaacl/grpo_speculative.py (read-only)",
+    "cause": "Actual target step is each nonempty retained rollout, not four; numpy reward std ddof=0; all-constant groups removed from target."
+  }
+]

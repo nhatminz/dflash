@@ -6,6 +6,7 @@ speedup. A calibration cache is used only for identical GPU and slot shapes.
 
 import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -95,7 +96,7 @@ def micro(a):
     teacher = torch.randn(a.rows, a.vocab, device="cuda").softmax(-1)
     weights = torch.ones(a.rows, device="cuda")
     feedback_ms = measure(
-        lambda: feedback(adapter, h, u, ids, q, norm, teacher, weights, fw), adapter.reset
+        lambda: feedback(adapter, h, u, ids, q, norm, teacher, weights, fw, raw=raw), adapter.reset
     )
     device = torch.cuda.get_device_name()
     winners = []
@@ -147,10 +148,14 @@ def rollout(a):
 
         for file in Path(a.model).glob("*.safetensors"):
             with safe_open(file, framework="pt") as handle:
-                if "lm_head.weight" in handle.keys():
+                model_config = json.loads((Path(a.model) / "config.json").read_text())
+                key = "lm_head.weight"
+                if key not in handle.keys() and model_config.get("tie_word_embeddings"):
+                    key = "model.embed_tokens.weight"
+                if key in handle.keys():
                     atomic_save(
                         dict(
-                            A=initialize_projector(handle.get_tensor("lm_head.weight"), a.rank),
+                            A=initialize_projector(handle.get_tensor(key), a.rank),
                             version=0,
                         ),
                         Path(a.output).with_suffix(".projector.pt"),
@@ -183,7 +188,7 @@ def rollout(a):
             "benchmark",
             str(checkpoint),
             a.method == "dflash_reflex",
-            asdict(ReflexConfig(rank=a.rank, profile=a.profile)),
+            asdict(ReflexConfig(rank=a.rank, profile=a.profile, metrics_mode=a.metrics_mode)),
         ),
     )
     start = time.perf_counter()
@@ -201,8 +206,8 @@ def rollout(a):
         tokens=tokens,
         wall_time_s=elapsed,
         tokens_per_s=tokens / elapsed,
-        aal=accepted / rounds if rounds else 0,
-        acceptance=accepted_draft / proposed if proposed else 0,
+        aal=accepted / rounds if rounds else None,
+        acceptance=accepted_draft / proposed if proposed else None,
         profile_ms=packet["profile_ms"],
         opd_A_gradient_norm=float(packet["grad_sum"].norm())
         if packet["grad_sum"] is not None
@@ -230,10 +235,21 @@ def main():
     p.add_argument("--temperature", type=float, default=1.0)
     p.add_argument("--top-p", type=float, default=0.95)
     p.add_argument("--memory", type=float, default=0.7)
+    p.add_argument("--metrics-mode", choices=["production", "instrumented"], default="production")
     p.add_argument("--profile", action="store_true")
     a = p.parse_args()
+    os.environ["METHOD"] = a.method
+    os.environ["METRICS_MODE"] = a.metrics_mode
+    os.environ["OPD_PROFILE"] = "1" if a.profile else "0"
     if a.mode == "rollout" and not all((a.model, a.draft, a.prompts)):
         p.error("rollout requires --model, --draft, --prompts")
+    if (
+        a.mode == "rollout"
+        and a.method == "dflash"
+        and a.profile
+        and a.metrics_mode == "production"
+    ):
+        p.error("baseline profiling requires --metrics-mode instrumented")
     Path(a.output).parent.mkdir(parents=True, exist_ok=True)
     report = micro(a) if a.mode == "micro" else rollout(a)
     Path(a.output).write_text(json.dumps(report, indent=2) + "\n")

@@ -18,7 +18,7 @@ def test_actual_nemo_configuration_inheritance(tmp_path):
         check=True,
         capture_output=True,
         text=True,
-        env=dict(os.environ, DRY_RUN="true"),
+        env=dict(os.environ, DRY_RUN="true", FAIRNESS_PROFILE="native_dflash"),
     )
     raw = json.loads(process.stdout[process.stdout.index("{\n") :])
     import yaml

@@ -5,6 +5,7 @@ drains feedback after ALL requests complete. No file or RPC I/O occurs in a
 verification round. CUDA events order the optional feedback stream.
 """
 
+import os
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -17,13 +18,31 @@ from .rollout_state import CohortState
 
 _runtime = None
 _pool = None
+# Process-level switches let production baseline bypass hooks in pinned vLLM.
+HOOKS_ENABLED = (
+    os.environ.get("METHOD", "dflash_reflex") == "dflash_reflex"
+    or os.environ.get("METRICS_MODE", "production") == "instrumented"
+)
+PROFILE_ENABLED = os.environ.get("OPD_PROFILE", "0").lower() in {"1", "true"}
+
+
+def tensor_version(tensor):
+    # Some pinned inference loaders create head tensors under inference_mode.
+    return None if tensor.is_inference() else tensor._version
 
 
 def current():
+    if (
+        _runtime is not None
+        and not _runtime.enabled
+        and _runtime.config.metrics_mode == "production"
+    ):
+        return None
     return _runtime
 
 
 class Runtime:
+    @torch.inference_mode(False)
     def __init__(self, runner, group_id, projector, version, enabled, config):
         self.runner, self.group_id = runner, group_id
         self.version, self.enabled, self.config = version, enabled, config
@@ -33,9 +52,35 @@ class Runtime:
         self.eos = []
         self.adapter = self.cache = self.proposal_workspace = self.feedback_workspace = None
         self.projector = projector
-        self.counters = torch.zeros(8, device=runner.device, dtype=torch.float64)
-        self.accepted_buffer = torch.empty(
-            runner.max_num_reqs, device=runner.device, dtype=torch.int32
+        self.instrumented = config.metrics_mode == "instrumented"
+        self.capture = enabled or self.instrumented
+        self.raw = None
+        self.raw_requests = {}
+        self.proposal_stamp = None
+        self.pipeline = "fused"
+        self.positions = (
+            torch.arange(runner.speculative_config.num_speculative_tokens + 1, device=runner.device)
+            if self.capture
+            else None
+        )
+        self.request_positions = (
+            torch.arange(runner.max_num_reqs, device=runner.device) if enabled else None
+        )
+        self.feedback_positions = (
+            torch.arange(
+                runner.max_num_reqs * runner.speculative_config.num_speculative_tokens,
+                device=runner.device,
+            )
+            if enabled
+            else None
+        )
+        self.counters = torch.zeros(
+            8, device=runner.device if self.capture else "cpu", dtype=torch.float64
+        )
+        self.accepted_buffer = (
+            torch.empty(runner.max_num_reqs, device=runner.device, dtype=torch.int32)
+            if self.capture
+            else None
         )
         self.closed = False
         self.profile_events = []
@@ -116,21 +161,60 @@ class Runtime:
         # Selected teacher-ID logits must use the current shared head as well.
         self.adapter.head = model.lm_head.weight
         self.adapter.wait()
-        ids, q, norm, u = kernels.propose(self.adapter, hidden, raw, self.proposal_workspace)
+        # Synchronous pinned scheduler verifies before proposing the next block.
+        # Retain compute_logits output, without copying a vocabulary matrix or B.
+        # This also preserves head bias, dtype rounding and logit processing.
+        self.raw = raw
+        self.raw_requests = {key: i * width for i, key in enumerate(self.request_ids)}
+        self.proposal_stamp = (
+            self.adapter.revision,
+            self.version,
+            self.adapter.A._version,
+            self.adapter.head.data_ptr(),
+            tensor_version(self.adapter.head),
+        )
+        self.pipeline = self.config.pipeline
+        if self.pipeline == "auto":
+            key = f"{self.adapter.device_name}|{batch}|{width}|{hidden.shape[-1]}|{raw.shape[-1]}|{self.config.rank}|{self.config.topk}|{hidden.dtype}"
+            if raw.dtype != hidden.dtype:
+                key += f"|logits={raw.dtype}"
+            entries = self.adapter.dispatch_cache.get("pipelines_by_density", {}).get(key)
+            prior = self.adapter.prior_feedback_density
+            if self.config.update_interval != 1:
+                self.pipeline = "fused"
+            elif entries and prior is not None:
+                self.pipeline = min(entries, key=lambda entry: abs(entry["density"] - prior))[
+                    "pipeline"
+                ]
+            else:
+                self.pipeline = self.adapter.dispatch_cache.get("pipelines", {}).get(key, "fused")
+        # GEMM changes reduction order; selective uses the fused FP32 reference.
+        if self.config.pipeline == "auto" and self.config.dense_implementation == "gemm":
+            self.pipeline = "fused"
+        if self.pipeline.startswith("selective") and self.config.dense_implementation == "gemm":
+            raise ValueError("selective pipeline requires fused correction, not GEMM")
+        function = (
+            kernels.greedy_propose if self.pipeline.startswith("selective") else kernels.propose
+        )
+        with self.phase("corrected_argmax_ms"):
+            ids, q, norm, u = function(self.adapter, hidden, raw, self.proposal_workspace)
         slots = self.cache.proposal_slots(self.request_ids)
         row = torch.tensor(slots, device=hidden.device)
         # The caches retain MASK states only. The anchor/bonus has no OPD row.
         self.cache.h[row] = hidden.view(batch, width, -1)
         self.cache.u[row] = u.view(batch, width, -1)
-        self.cache.ids[row] = ids.view(batch, width, -1)
-        self.cache.q[row] = q.view(batch, width, -1)
-        self.cache.norm[row] = norm.view(batch, width, 2)
+        if self.pipeline == "fused":
+            self.cache.ids[row] = ids.view(batch, width, -1)
+            self.cache.q[row] = q.view(batch, width, -1)
+            self.cache.norm[row] = norm.view(batch, width, 2)
         return ids[:, 0]  # Actual proposal q is one-hot; verifier receives None.
 
     @torch.no_grad()
     def verified(self, p, accepted, metadata, output_ids, *, greedy=False):
         if self.closed:
             raise RuntimeError("feedback after cohort end")
+        if not self.capture:
+            return
         if self.verification_start is not None:
             end = torch.cuda.Event(enable_timing=True)
             end.record()
@@ -142,7 +226,7 @@ class Runtime:
             extract_start.record()
         lengths = torch.tensor(metadata.num_draft_tokens, device=device, dtype=torch.long)
         width = output_ids.shape[1] - 1
-        slots = torch.arange(width + 1, device=device)[None, :]
+        slots = self.positions[: width + 1][None, :]
         limits = torch.tensor(self.remaining, device=device, dtype=torch.long)
         stop_width = max((len(ids) for ids in self.eos), default=0)
         if stop_width:
@@ -176,15 +260,37 @@ class Runtime:
             return
         if self.adapter is None:
             raise RuntimeError("verification before a captured DFlash proposal")
+        stamp = (
+            self.adapter.revision,
+            self.version,
+            self.adapter.A._version,
+            self.adapter.head.data_ptr(),
+            tensor_version(self.adapter.head),
+        )
+        if stamp != self.proposal_stamp:
+            raise RuntimeError(
+                "proposal distribution changed before verification (A/B/head version)"
+            )
+        if any(
+            length and request not in self.raw_requests
+            for request, length in zip(self.request_ids, metadata.num_draft_tokens, strict=True)
+        ):
+            raise RuntimeError("overlapping proposal batches are unsupported by synchronous Reflex")
         indices = self.cache.verification_slots(self.request_ids, metadata.num_draft_tokens)
         # One GPU vector covers all variable-length requests; no token loop.
         n = metadata.draft_token_ids.numel()
         request_rows = torch.repeat_interleave(
-            torch.arange(len(indices), device=device), lengths, output_size=n
+            self.request_positions[: len(indices)], lengths, output_size=n
         )
         starts = torch.cat((lengths.new_zeros(1), lengths.cumsum(0)[:-1]))
-        position = torch.arange(n, device=device) - starts[request_rows]
+        position = self.feedback_positions[:n] - starts[request_rows]
         cache_row = torch.tensor(indices, device=device)[request_rows]
+        raw_starts = torch.tensor(
+            [self.raw_requests.get(key, 0) for key in self.request_ids],
+            device=device,
+            dtype=torch.long,
+        )
+        raw_rows = raw_starts[request_rows] + position
         accepted_slot = position < accepted[request_rows]
         selected = (
             (position <= accepted[request_rows])
@@ -202,11 +308,6 @@ class Runtime:
         di = self.cache.ids[cache_row, position].contiguous()
         dq = self.cache.q[cache_row, position].contiguous()
         norm = self.cache.norm[cache_row, position].contiguous()
-        if greedy:
-            # All-greedy teacher is the constrained verifier argmax delta.
-            teacher = torch.zeros_like(p, dtype=torch.float32)
-            teacher.scatter_(1, p.argmax(-1, keepdim=True), 1.0)
-            p = teacher
         from . import kernels
 
         if extract_start is not None:
@@ -218,17 +319,45 @@ class Runtime:
             adapter.stream.wait_stream(torch.cuda.current_stream(device))
             with torch.cuda.stream(adapter.stream):
                 sums = kernels.feedback(
-                    adapter, h, u, di, dq, norm, p, weights, self.feedback_workspace
+                    adapter,
+                    h,
+                    u,
+                    di,
+                    dq,
+                    norm,
+                    p,
+                    weights,
+                    self.feedback_workspace,
+                    raw=self.raw,
+                    raw_rows=raw_rows,
+                    proposal_workspace=self.proposal_workspace,
+                    selective=self.pipeline.startswith("selective"),
+                    masked_teacher=self.pipeline == "selective_masked",
+                    greedy_teacher=greedy,
                 )
                 if sums is not None:
                     self.counters[4:].add_(sums.double())
                 adapter.ready.record()
-            for tensor in (h, u, di, dq, norm, p, weights):
+            for tensor in (h, u, di, dq, norm, p, weights, self.raw, raw_rows):
                 tensor.record_stream(adapter.stream)
             adapter.has_event = True
         else:
             sums = kernels.feedback(
-                adapter, h, u, di, dq, norm, p, weights, self.feedback_workspace
+                adapter,
+                h,
+                u,
+                di,
+                dq,
+                norm,
+                p,
+                weights,
+                self.feedback_workspace,
+                raw=self.raw,
+                raw_rows=raw_rows,
+                proposal_workspace=self.proposal_workspace,
+                selective=self.pipeline.startswith("selective"),
+                masked_teacher=self.pipeline == "selective_masked",
+                greedy_teacher=greedy,
             )
             if sums is not None:
                 self.counters[4:].add_(sums.double())
@@ -250,24 +379,36 @@ class Runtime:
             profile_ms={},
             updates=0,
             inference_rng=rng_state(),
+            core_metrics_available=self.capture,
+            metrics_mode=self.config.metrics_mode,
         )
         if self.adapter is not None:
             a = self.adapter
+            dispatch_counts = a.dispatch_counts.cpu().tolist()
             packet.update(
                 grad_sum=a.grad_sum.cpu(),
                 grad_weight=a.grad_weight.cpu(),
-                updates=a.round // self.config.update_interval,
-                sparse_dispatch_count=a.sparse_dispatch_count,
-                dense_dispatch_count=a.dense_dispatch_count,
+                updates=int(a.update_count),
+                sparse_dispatch_count=dispatch_counts[0],
+                dense_dispatch_count=dispatch_counts[1],
+            )
+            proposed = float(self.counters[3])
+            a.prior_feedback_density = float(self.counters[7]) / proposed if proposed else None
+            packet.update(
+                active_rows=int(a.active_count),
+                gradient_rows=float(self.counters[7]),
+                gradient_weight=float(a.grad_weight),
+                A_parameter_norm=float(a.A.norm()),
             )
             if self.config.diagnostics:
-                packet.update(B_norm=float(a.B.norm()), active_rows=int(a.active_count))
+                packet.update(B_norm=float(a.B.norm()))
             self.profile_events.extend(a.profile_events)
         for label, start, end in self.profile_events:
             end.synchronize()
             packet["profile_ms"][label] = packet["profile_ms"].get(label, 0.0) + start.elapsed_time(
                 end
             )
+        self.raw = None
         return packet
 
 

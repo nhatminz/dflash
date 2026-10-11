@@ -19,14 +19,21 @@ def main():
         with (run / "logs/rollout_timing.csv").open() as stream:
             rows = list(csv.DictReader(stream))
         key = "cumulative_aal" if args.cumulative else "iter_aal"
-        ax.plot([int(r["iteration"]) for r in rows], [float(r[key]) for r in rows], label=run.name)
+        valid = [r for r in rows if r[key] not in ("", "null", "None")]
+        if valid:
+            ax.plot(
+                [int(r["iteration"]) for r in valid], [float(r[key]) for r in valid], label=run.name
+            )
+        else:
+            print(f"{run.name}: AAL unavailable (production baseline); use instrumented comparison")
     ax.set(
         xlabel="GRPO iteration",
         ylabel="Accepted path tokens / verification",
         title="DFlash average accepted length",
     )
     ax.grid(alpha=0.25)
-    ax.legend(fontsize="small")
+    if ax.lines:
+        ax.legend(fontsize="small")
     fig.savefig(args.output, dpi=180)
 
 

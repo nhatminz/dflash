@@ -22,21 +22,63 @@ def replace(path, before, after, count=1):
     path.write_text(source.replace(before, after, count))
 
 
+def migrate_legacy_vllm(root):
+    """Migrate only the exact previously shipped hooks; preserve other source."""
+    for relative in (
+        "v1/spec_decode/llm_base_proposer.py",
+        "v1/worker/gpu_model_runner.py",
+        "v1/sample/rejection_sampler.py",
+    ):
+        path = root / relative
+        source = path.read_text()
+        source = source.replace(
+            "        from dflash_reflex.vllm_runtime import current\n        reflex = current()\n",
+            "        reflex = current() if HOOKS_ENABLED else None\n",
+        )
+        source = source.replace(
+            "    from dflash_reflex.vllm_runtime import current\n    reflex = current()\n",
+            "    reflex = current() if HOOKS_ENABLED else None\n",
+        )
+        source = source.replace(
+            "\n            from dflash_reflex.vllm_runtime import profiled_forward\n"
+            '            ret_hidden_states = profiled_forward("dflash_forward_ms", self.model, **model_kwargs)',
+            "\n            ret_hidden_states = self.model(**model_kwargs)",
+        )
+        source = source.replace(
+            "        from dflash_reflex.vllm_runtime import profiled_forward\n"
+            '        return profiled_forward("target_forward_ms", self.model,\n',
+            "        return self.model(\n",
+        )
+        if source != path.read_text():
+            path.write_text(source)
+
+
 def patch_vllm(root):
+    migrate_legacy_vllm(root)
+    for relative in (
+        "v1/spec_decode/llm_base_proposer.py",
+        "v1/worker/gpu_model_runner.py",
+        "v1/sample/rejection_sampler.py",
+    ):
+        replace(
+            root / relative,
+            "import torch\n",
+            "import torch\nfrom functools import partial\n"
+            "from dflash_reflex.vllm_runtime import HOOKS_ENABLED, PROFILE_ENABLED, current, profiled_forward\n",
+        )
     proposer = root / "v1/spec_decode/llm_base_proposer.py"
     replace(
         proposer,
         "\n            ret_hidden_states = self.model(**model_kwargs)",
-        "\n            from dflash_reflex.vllm_runtime import profiled_forward\n"
-        '            ret_hidden_states = profiled_forward("dflash_forward_ms", self.model, **model_kwargs)',
+        '\n            ret_hidden_states = (profiled_forward("dflash_forward_ms", self.model, **model_kwargs)\n'
+        "                                 if PROFILE_ENABLED else self.model(**model_kwargs))",
         count=1,
     )
     replace(
         proposer,
         '        """Greedy-sample draft tokens from hidden states."""\n',
         '        """Greedy-sample draft tokens from hidden states."""\n'
-        "        from dflash_reflex.vllm_runtime import current\n"
-        "        reflex = current()\n"
+        "        reflex = current() if HOOKS_ENABLED else None\n"
         '        if self.method == "dflash" and reflex is not None and reflex.enabled:\n'
         "            return reflex.propose(self.model, hidden_states)\n",
     )
@@ -44,8 +86,8 @@ def patch_vllm(root):
     replace(
         runner,
         "        return self.model(\n            input_ids=input_ids,\n",
-        "        from dflash_reflex.vllm_runtime import profiled_forward\n"
-        '        return profiled_forward("target_forward_ms", self.model,\n'
+        '        return (partial(profiled_forward, "target_forward_ms", self.model)\n'
+        "                if PROFILE_ENABLED else self.model)(\n"
         "            input_ids=input_ids,\n",
     )
     replace(
@@ -53,8 +95,7 @@ def patch_vllm(root):
         "        sampling_metadata = self.input_batch.sampling_metadata\n"
         "        # Update output token ids",
         "        sampling_metadata = self.input_batch.sampling_metadata\n"
-        "        from dflash_reflex.vllm_runtime import current\n"
-        "        reflex = current()\n"
+        "        reflex = current() if HOOKS_ENABLED else None\n"
         "        if reflex is not None:\n"
         "            reflex.context(self)\n"
         "        # Update output token ids",
@@ -63,8 +104,7 @@ def patch_vllm(root):
     replace(
         sampler,
         "    # Create output buffer.\n",
-        "    from dflash_reflex.vllm_runtime import current\n"
-        "    reflex = current()\n"
+        "    reflex = current() if HOOKS_ENABLED else None\n"
         "    if reflex is not None and synthetic_mode:\n"
         '        raise ValueError("Reflex requires actual rejection sampling")\n'
         "    feedback_accept = reflex.acceptance_buffer(batch_size) if reflex is not None else None\n"
@@ -142,6 +182,11 @@ def patch_nemo(root):
         "        from dflash_reflex.nemo_bridge import generate_cohort\n"
         "        outputs = generate_cohort(self.llm, prompts, sampling_params, use_tqdm=use_tqdm)",
     )
+    replace(
+        worker,
+        "            seed=seed,\n",
+        '            seed=int(os.environ["TRAIN_SUBSET_SEED"]),\n',
+    )
     worker = root / "models/policy/workers/megatron_policy_worker.py"
     replace(
         worker,
@@ -189,7 +234,31 @@ def patch_nemo(root):
         "                        extracted_answer = None\n"
         '                    elif kwargs.get("math_verify_impl") == "dapo_math_verify":',
     )
+    loss = root / "algorithms/loss/loss_functions.py"
+    replace(
+        loss,
+        "    disable_ppo_ratio: bool = False\n",
+        "    disable_ppo_ratio: bool = False\n"
+        "    # Preserve the k3 gradient used by SpecNaacl (no score factor).\n"
+        "    specnaacl_kl_gradient: bool = False\n",
+    )
+    replace(
+        loss,
+        "        self.force_on_policy_ratio = cfg.force_on_policy_ratio",
+        "        self.specnaacl_kl_gradient = cfg.specnaacl_kl_gradient\n"
+        "        self.force_on_policy_ratio = cfg.force_on_policy_ratio",
+    )
+    replace(
+        loss,
+        "            # On-policy KL approximation\n            # KL samples come from the optimized policy, so the KL loss must include\n            # the score-function gradient through the sampling probability; see\n            # https://arxiv.org/abs/2506.09477v1. In the non-IS case,\n            # exp(x - x.detach()) has forward value 1 while preserving that gradient.\n            if self.use_on_policy_kl_approximation:\n                # See: docs/guides/grpo.md#on-policy-kl-approximation\n                kl_importance_weights = torch.exp(\n                    curr_logprobs_unfiltered - generation_logprobs\n                )\n            else:\n                kl_importance_weights = torch.exp(\n                    curr_logprobs_unfiltered - curr_logprobs_unfiltered.detach()\n                )\n            kl_importance_weights = torch.nan_to_num(\n                kl_importance_weights, nan=0.0, posinf=0.0, neginf=0.0\n            )\n\n            # Compute KL loss\n            kl = self.reference_policy_kl_penalty * calculate_kl(\n                logprobs=curr_logprobs_unfiltered,\n                logprobs_reference=reference_policy_logprobs,\n                kl_type=self.reference_policy_kl_type,\n                input_clamp_value=self.kl_input_clamp_value,\n                output_clamp_value=self.kl_output_clamp_value,\n                importance_sampling_weights=kl_importance_weights,\n            )\n\n",
+        "            if self.specnaacl_kl_gradient:\n                from dflash_reflex.grpo_loss import specnaacl_kl_terms\n                kl = self.reference_policy_kl_penalty * specnaacl_kl_terms(\n                    curr_logprobs_unfiltered, reference_policy_logprobs)\n            else:\n                # On-policy KL approximation\n                # KL samples come from the optimized policy, so the KL loss must include\n                # the score-function gradient through the sampling probability; see\n                # https://arxiv.org/abs/2506.09477v1. In the non-IS case,\n                # exp(x - x.detach()) has forward value 1 while preserving that gradient.\n                if self.use_on_policy_kl_approximation:\n                    # See: docs/guides/grpo.md#on-policy-kl-approximation\n                    kl_importance_weights = torch.exp(\n                        curr_logprobs_unfiltered - generation_logprobs\n                    )\n                else:\n                    kl_importance_weights = torch.exp(\n                        curr_logprobs_unfiltered - curr_logprobs_unfiltered.detach()\n                    )\n                kl_importance_weights = torch.nan_to_num(\n                    kl_importance_weights, nan=0.0, posinf=0.0, neginf=0.0\n                )\n\n                # Compute KL loss\n                kl = self.reference_policy_kl_penalty * calculate_kl(\n                    logprobs=curr_logprobs_unfiltered,\n                    logprobs_reference=reference_policy_logprobs,\n                    kl_type=self.reference_policy_kl_type,\n                    input_clamp_value=self.kl_input_clamp_value,\n                    output_clamp_value=self.kl_output_clamp_value,\n                    importance_sampling_weights=kl_importance_weights,\n                )\n\n",
+    )
+
     grpo = root / "algorithms/grpo.py"
+    previous_record = "            record_iteration(total_steps + 1, timing_metrics, metrics)\n"
+    revised_record = "            record_iteration(total_steps + 1, timing_metrics, dict(metrics, reward=float(rewards.float().mean())))\n"
+    if previous_record in grpo.read_text():
+        grpo.write_text(grpo.read_text().replace(previous_record, revised_record))
     replace(
         grpo,
         "        for batch in wrapped_dataloader:\n            refit_metrics:",
@@ -201,7 +270,7 @@ def patch_nemo(root):
         grpo,
         "            # Reset the batch and set dynamic_sampling_num_gen_batches to 0\n",
         "            from dflash_reflex.nemo_bridge import record_iteration\n"
-        "            record_iteration(total_steps + 1, timing_metrics, metrics)\n"
+        "            record_iteration(total_steps + 1, timing_metrics, dict(metrics, reward=float(rewards.float().mean())))\n"
         "            # Reset the batch and set dynamic_sampling_num_gen_batches to 0\n",
     )
     # The synchronous path commits its sidecar after final per-step timing.

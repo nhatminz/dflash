@@ -17,6 +17,34 @@ the machine lacks that runtime, B200, and the specified local models/data.
 This is an implementation with bounded correctness tests, not a measured
 B200 speedup or a claim of completed production qualification.
 
+
+**Final correctness update:** `FAIRNESS_PROFILE=specnaacl_matched` is the
+intentional default and **fails preflight** on this pinned integration. Seven
+independent target LoRA adapters, the requested four-rollout target cadence,
+and target-only constant-reward filtering are not equivalent to the joint
+Megatron recipe. A successful dry run never conceals these blockers. The local
+SpecNaacl source actually steps its target on each nonempty filtered rollout;
+`ACCUMULATION_STEPS=4` contributes to its step label, not a four-rollout readiness
+condition. Use the explicitly non-equivalent `native_dflash` profile to run.
+
+The revised native objective maps `BETA=.04`, `EPSILON=.1` into the real loss,
+uses a sequence mean and SpecNaacl's k3 gradient without NeMo's score factor.
+Synthetic tests execute the actual patched NeMo loss against the extracted
+SpecNaacl loss. Full target fine-tuning and sample/mask differences remain.
+For the original native objective or an old checkpoint, use
+`GRPO_OBJECTIVE=original_nemo BETA=0 EPSILON=.2`; keep all original run overrides.
+Mismatched resume settings are rejected, and checkpoint files are preserved.
+
+`METRICS_MODE=production` is default. Baseline has no GPU acceptance buffer,
+Reflex state, or optional forward wrapper. Missing AAL is null. For AAL studies
+run **both** methods with `METRICS_MODE=instrumented`; for throughput run both
+with production mode. Never compare a profiled baseline with production Reflex.
+
+See [the final report](validation/final_reflex_optimization_report.md),
+[fairness matrix](validation/fairness_config_matrix.json), and
+[measured complete OPD timings](validation/benchmark_before_after.json).
+There is no claim of B200/live-engine/GRPO qualification.
+
 ## Sources
 
 | Dependency | Exact audited commit |
@@ -43,6 +71,7 @@ Primary sources: [issue #3698](https://github.com/NVIDIA-NeMo/RL/issues/3698),
 
 ```bash
 cd dflash
+export FAIRNESS_PROFILE=native_dflash
 DRY_RUN=true bash train_qwen3_4b.sh
 # On the CUDA-13/B200 host, install once:
 bash scripts/setup_environment.sh
@@ -133,15 +162,41 @@ joint weights are under `resume/`, not duplicated into those directories.
 
 ```bash
 PYTHONPATH="$PWD:$PWD/third_party/nemo-rl" .venv-mcore/bin/python -m pytest tests -q
-PYTHONPATH="$PWD" .venv-vllm/bin/python scripts/benchmark_rollout.py \
-  --mode micro --rows 64 --hidden 2560 --vocab 151936 --repeats 10 \
-  --output outputs/benchmarks/qwen3_4b_micro.json \
+PYTHONPATH="$PWD" .venv-vllm/bin/python scripts/benchmark_reflex_hotpath.py \
+  --model-config /workspace/storage-shared/models/Qwen3-4B/config.json \
+  --requests 1 8 32 64 --repeats 15 \
+  --output outputs/benchmarks/b200_hotpath.json \
   --cache outputs/benchmarks/b200_dispatch.json
-OPD_DISPATCH_CACHE="$PWD/outputs/benchmarks/b200_dispatch.json" bash train_qwen3_4b.sh
+FAIRNESS_PROFILE=native_dflash OPD_DISPATCH_CACHE="$PWD/outputs/benchmarks/b200_dispatch.json" \
+  bash train_qwen3_4b.sh
 ```
 
 Microbenchmark cache keys include GPU, exact row/hidden/vocabulary/rank/top-k
-shape and dtype. Unmatched shapes use a conservative occupancy heuristic and
-fused correction; there is no automatic tuning sweep. Timings from this utility
+shape and dtype. GPU dispatch reads actual unique active_count. Unmatched shapes
+use sparse fused correction and the fused-statistics proposal; there is no automatic tuning sweep. Timings from this utility
 exclude transformer forwards and cannot establish end-to-end GRPO speedup.
 `OPD_PROFILE=1` adds CUDA event timing, resolved only at the cohort boundary.
+
+`OPD_PIPELINE=auto` selects measured `fused`, `selective` or `selective_masked`
+paths by GPU/shape and the last completed cohort's feedback density. An unseen
+GPU defaults to the conservative fused path. Calibrate B200 separately; the
+RTX 3090 cache is evidence for that GPU only. Selected statistics retain the
+original logits until verification (no extra LM-head evaluation or B copy).
+This extends logits lifetime: BF16 64 requests x 15 slots x 151936 vocabulary
+is approximately 278 MiB (556 MiB if the actual logits are FP32). Teacher ties
+follow stable token-ID ordering.
+
+Calibration also distinguishes hidden/logit dtypes. If a model returns FP32
+logits for BF16 states, calibrate with `--logits-dtype float32`; a BF16 bucket
+is not reused for that path. Explicit dense GEMM feedback reuses its exact
+corrected proposal buffer. GEMM remains excluded from automatic selection.
+
+Inspect strict cross-framework compatibility without GPU/model weights:
+
+```bash
+python3 scripts/compare_specnaacl_config.py --model qwen3_4b --dataset simplelr \
+  --profile specnaacl_matched
+# Exit 2 is expected until the reported compatibility blockers are resolved.
+DATASET=simplelr FAIRNESS_PROFILE=specnaacl_matched METHOD=dflash_reflex bash train_qwen3_4b.sh
+DATASET=simplelr FAIRNESS_PROFILE=specnaacl_matched METHOD=dflash bash train_qwen3_4b_dflash.sh
+```

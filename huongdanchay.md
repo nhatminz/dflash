@@ -12,6 +12,37 @@ Megatron đầy đủ trên B200**, vì thiếu runtime CUDA 13 và đường d�
 được yêu cầu. Các lệnh dưới đây dành cho máy có dữ liệu và môi trường phù hợp;
 không hiểu kết quả kiểm thử nhỏ là xác nhận chạy dài đã thành công.
 
+
+## Cập nhật correctness/fairness cuối
+
+Mặc định mới `FAIRNESS_PROFILE=specnaacl_matched` sẽ **dừng preflight** với backend
+đã pin: LoRA QKV/gate-up gộp không tương đương bảy adapter PEFT độc lập; chưa có
+cadence target bốn cohort độc lập với draft/A; và cách lọc nhóm reward/mask khác.
+Không coi profile này là cấu hình chạy thành công. Để thực hiện các lệnh native
+trong tài liệu, đặt rõ:
+
+```bash
+export FAIRNESS_PROFILE=native_dflash
+export METRICS_MODE=production
+```
+
+Native vẫn train target đầy đủ, nên chỉ so baseline/Reflex trong cùng profile,
+không kết luận tương đương hoàn toàn SpecNaacl. `BETA=.04`, `EPSILON=.1` đã đi vào
+loss thật; sequence mean và gradient k3 đã đối chiếu trực tiếp với loss Spec.
+Đọc [báo cáo cuối](validation/final_reflex_optimization_report.md) và
+[ma trận fairness](validation/fairness_config_matrix.json) trước khi chạy B200.
+
+Code SpecNaacl hiện tại cập nhật target sau mỗi rollout có nhóm reward biến thiên,
+rồi xóa batch. `ACCUMULATION_STEPS=4` không tạo bốn-rollout readiness; bảng nominal
+256 response trong prompt khác hành vi nguồn hiện tại. Draft/A vẫn cập nhật mỗi
+rollout thành công; A dùng gradient OPD, B shared trong cohort và reset giữa cohort.
+
+Đo tốc độ: dùng production cho cả hai method. Đo AAL: dùng instrumented cho cả hai.
+Baseline production không thu AAL; log null, không giả số 0. Profile/diagnostics
+là lần chạy riêng. Để tái hiện objective NeMo cũ hoặc resume checkpoint cũ, thêm
+`GRPO_OBJECTIVE=original_nemo BETA=0 EPSILON=.2` và giữ nguyên các overrides cũ.
+Nếu có khác biệt bất tương thích, preflight báo lỗi, không xóa checkpoint.
+
 ## 1. Chuẩn bị môi trường riêng
 
 ```bash
@@ -346,7 +377,7 @@ Microbenchmark có ba mức active vocabulary, so sparse/fused dense/GEMM và
 feedback; không chạy transformer hoặc GRPO. Cache chỉ dùng cho GPU và shape
 trùng hoàn toàn. `--rows` là số MASK slots thực tế trong một proposal batch,
 không phải số prompt; có thể thay bằng shape đang quan tâm. Shape không có
-cache dùng heuristic mặc định, không tự sweep. Kết quả RTX 3090 nhỏ trong
+cache dùng sparse fused và proposal fused bảo thủ; không tự sweep. Kết quả RTX 3090 nhỏ trong
 `validation/cuda_microbenchmark.json` không được dùng làm số liệu B200.
 
 Profile CUDA event nằm trong `metrics.jsonl.profile_ms`: target forward
@@ -384,3 +415,48 @@ Qwen3-8B đã pin, hidden/head dimensions, 36 target layers, 5 draft layers,
 auxiliary layer IDs, MASK row, block 16 và toàn bộ shapes weights. Không ghép
 checkpoint 8B này với Qwen2.5 hay target 4B. Qwen2.5 có QKV bias nên không
 được quảng cáo hỗ trợ trong bản tích hợp này.
+
+## Benchmark cuối và cấu hình B200 được đề nghị
+
+Giữ A trainable, B shared, rank 8, top-k 16, fast LR .01, feedback mỗi round.
+Chạy benchmark ngắn trên B200 một lần rồi dùng cache đúng GPU:
+
+```bash
+mkdir -p outputs/benchmarks
+PYTHONPATH="$PWD" .venv-vllm/bin/python scripts/benchmark_reflex_hotpath.py \
+  --model-config /workspace/storage-shared/models/Qwen3-4B/config.json \
+  --requests 1 8 32 64 --repeats 15 \
+  --cache outputs/benchmarks/b200_dispatch.json \
+  --output outputs/benchmarks/b200_hotpath.json
+export OPD_DISPATCH_CACHE="$PWD/outputs/benchmarks/b200_dispatch.json"
+FAIRNESS_PROFILE=native_dflash DATASET=simplelr METHOD=dflash_reflex bash train_qwen3_4b.sh
+FAIRNESS_PROFILE=native_dflash DATASET=simplelr METHOD=dflash bash train_qwen3_4b_dflash.sh
+# Dataset khác và resume:
+FAIRNESS_PROFILE=native_dflash DATASET=gsm8k bash train_qwen3_4b.sh
+FAIRNESS_PROFILE=native_dflash DATASET=dapo bash train_qwen3_4b.sh
+FAIRNESS_PROFILE=native_dflash DATASET=simplelr RESUME=auto bash train_qwen3_4b.sh
+```
+
+`OPD_PIPELINE=auto` dùng đo đạc theo GPU/shape; feedback density chỉ đọc ở cuối
+cohort. Có thể cố định fused/selective/selective_masked để tái lập kernel.
+Các candidate đều giữ q của đúng A/B/head lúc proposal, giữ logits gốc đến verify
+và chặn stale version. Không nhân bản B hoặc tính lại LM head. Thêm lifetime
+logits tối đa khoảng 278 MiB cho 64 request BF16 (556 MiB nếu logits FP32);
+cần tính vào memory budget.
+
+Cache phân biệt cả dtype hidden và logits. Nếu model trả logits FP32 với hidden
+BF16, benchmark phải thêm `--logits-dtype float32`; không dùng lại bucket BF16.
+GEMM bật thủ công giữ đúng buffer logits đã correction cho feedback; auto không
+chọn GEMM vì thứ tự reduction có thể thay quyết định khi logits gần bằng nhau.
+
+Lệnh matched chính xác, **hiện dự kiến thất bại preflight**:
+
+```bash
+python3 scripts/compare_specnaacl_config.py --model qwen3_4b --dataset simplelr --profile specnaacl_matched
+DATASET=simplelr FAIRNESS_PROFILE=specnaacl_matched METHOD=dflash_reflex bash train_qwen3_4b.sh
+DATASET=simplelr FAIRNESS_PROFILE=specnaacl_matched METHOD=dflash bash train_qwen3_4b_dflash.sh
+```
+
+Chưa có model/dataset/runtime phù hợp tại máy phát triển, nên chưa chạy GRPO thật
+hoặc pretrain đầy đủ. Chỉ tự chạy smoke 1–2 step ở B200 khi đã cài đúng environment;
+không dùng kết quả microbenchmark để khẳng định throughput sinh hoặc training.

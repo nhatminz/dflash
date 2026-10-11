@@ -1,13 +1,12 @@
 """Persistent A and one GPU fast adapter per rollout cohort."""
 
-import json
 import os
 from contextlib import contextmanager
-from pathlib import Path
 
 import torch
 
 from .config import ReflexConfig
+from .dispatch import load_cache
 from .feedback import topk_union_tail
 
 
@@ -21,12 +20,18 @@ def initialize_projector(head, rank=8, seed=42):
 
 
 class Adapter:
+    @torch.inference_mode(False)
     def __init__(self, head, projector, config: ReflexConfig):
-        self.head, self.A, self.config = head, projector, config
+        self.head, self.config = head, config
+        # vLLM invokes proposals inside inference_mode. Keep A versioned.
+        with torch.inference_mode(False):
+            self.A = projector.detach().float().clone()
         self.B = torch.zeros((head.shape[0], config.rank), device=head.device, dtype=torch.float32)
         self.grad_sum = torch.zeros_like(projector, dtype=torch.float32)
         self.grad_weight = torch.zeros((), device=head.device, dtype=torch.float32)
         self.round = 0
+        self.dispatch_counts = torch.zeros(2, device=head.device, dtype=torch.int64)
+        self.update_count = torch.zeros((), device=head.device, dtype=torch.int32)
         self.active = torch.zeros(head.shape[0], device=head.device, dtype=torch.int32)
         self.active_ids = torch.empty(head.shape[0], device=head.device, dtype=torch.int32)
         self.active_count = torch.zeros((), device=head.device, dtype=torch.int32)
@@ -37,10 +42,12 @@ class Adapter:
         self.ready = torch.cuda.Event() if self.stream is not None else None
         self.has_event = False
         self.has_updated = False
-        self.host_active_bound = 0
+        self.host_active_bound = 0  # Legacy reference benchmark only; never used in production.
         self.sparse_dispatch_count = self.dense_dispatch_count = 0
         cache = os.environ.get("OPD_DISPATCH_CACHE", "")
-        self.dispatch_cache = json.loads(Path(cache).read_text()) if cache else {}
+        self.dispatch_cache = load_cache(cache)
+        self.revision = 0
+        self.prior_feedback_density = None
         self.device_name = torch.cuda.get_device_name(head.device) if head.is_cuda else "cpu"
 
     def wait(self):
@@ -64,9 +71,12 @@ class Adapter:
         self.B.zero_()
         self.active.zero_()
         self.active_count.zero_()
+        self.update_count.zero_()
+        self.dispatch_counts.zero_()
         self.grad_sum.zero_()
         self.grad_weight.zero_()
         self.round = self.host_active_bound = 0
+        self.revision = 0
         self.has_updated = self.has_event = False
         self.profile_events.clear()
         self.sparse_dispatch_count = self.dense_dispatch_count = 0

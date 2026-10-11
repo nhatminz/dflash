@@ -42,7 +42,10 @@ def generate_cohort(llm, prompts, sampling_params, *, use_tqdm):
     config = (
         ReflexConfig.from_env()
         if enabled()
-        else ReflexConfig(profile=os.environ.get("OPD_PROFILE", "0").lower() in {"1", "true"})
+        else ReflexConfig(
+            metrics_mode=os.environ.get("METRICS_MODE", "production"),
+            profile=os.environ.get("OPD_PROFILE", "0").lower() in {"1", "true"},
+        )
     )
     if len(prompts) != int(os.environ["BATCH_SIZE"]) * int(os.environ["RESPONSES_PER_PROMPT"]):
         # Final incomplete DataLoader batches are allowed; NeMo may not split
@@ -71,6 +74,8 @@ def generate_cohort(llm, prompts, sampling_params, *, use_tqdm):
     packet = packets[0]
     atomic_save(packet["inference_rng"], root / "ipc/inference_rng.pt")
     packet["generation_time_s"] = time.perf_counter() - start
+    packet["rollout_responses"] = len(outputs)
+    packet["rollout_prompts"] = len(prompts) / int(os.environ["RESPONSES_PER_PROMPT"])
     packet["generated_tokens"] = sum(len(o.outputs[0].token_ids) for o in outputs)
     packet["iteration_id"] = json.loads((root / "ipc/iteration.json").read_text())["id"]
     packet_path = root / "ipc/feedback" / packet["iteration_id"] / (group + ".pt")
@@ -187,7 +192,7 @@ def restore_trainer_rng(worker, pretrained_path, init_optimizer):
     get_cuda_rng_tracker().set_states(state["cuda_tracker"])
 
 
-def configure_driver(resume_path=None):
+def configure_driver(resume_path=None, *, wall_start=None):
     global _metrics
     state = None
     if resume_path is not None:
@@ -222,6 +227,7 @@ def configure_driver(resume_path=None):
         os.environ["METHOD"],
         os.environ["DATASET"],
         None if state is None else state["metrics"],
+        wall_start=wall_start,
     )
 
 
@@ -251,8 +257,10 @@ def tracked_iterations(loader, epoch, global_step):
             bar.set_postfix(
                 loss=f"{train['loss']:.4f}" if "loss" in train else "N/A",
                 reward=f"{train['reward']:.3f}" if "reward" in train else "N/A",
-                aal=f"{row['iter_aal']:.3f}",
-                acc=f"{row['iter_acceptance_rate']:.3f}",
+                aal="N/A" if row["iter_aal"] is None else f"{row['iter_aal']:.3f}",
+                acc="N/A"
+                if row["iter_acceptance_rate"] is None
+                else f"{row['iter_acceptance_rate']:.3f}",
                 tok_s=f"{row['iter_generation_tokens_per_s']:.1f}",
                 elapsed_s=f"{row['cumulative_wall_time_s']:.1f}",
                 step=_iteration.get("step", global_step),
