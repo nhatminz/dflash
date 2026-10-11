@@ -15,14 +15,16 @@ không hiểu kết quả kiểm thử nhỏ là xác nhận chạy dài đã th
 
 ## Cập nhật correctness/fairness cuối
 
-Mặc định mới `FAIRNESS_PROFILE=specnaacl_matched` sẽ **dừng preflight** với backend
+Mặc định là `FAIRNESS_PROFILE=native_dflash`, không cần thêm biến này trước mỗi
+lệnh chạy. Nếu shell còn giá trị cũ, chạy `unset FAIRNESS_PROFILE` để dùng mặc định.
+Đặt rõ `FAIRNESS_PROFILE=specnaacl_matched` vẫn **dừng preflight** với backend
 đã pin: LoRA QKV/gate-up gộp không tương đương bảy adapter PEFT độc lập; chưa có
 cadence target bốn cohort độc lập với draft/A; và cách lọc nhóm reward/mask khác.
-Không coi profile này là cấu hình chạy thành công. Để thực hiện các lệnh native
-trong tài liệu, đặt rõ:
+Không coi profile matched là cấu hình chạy thành công. Để dùng các mặc định native
+và đo tốc độ trong tài liệu:
 
 ```bash
-export FAIRNESS_PROFILE=native_dflash
+unset FAIRNESS_PROFILE
 export METRICS_MODE=production
 ```
 

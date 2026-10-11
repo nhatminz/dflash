@@ -597,7 +597,7 @@
   },
   "fairness": {
     "strict_equivalence": false,
-    "default_profile": "specnaacl_matched",
+    "default_profile": "native_dflash",
     "supported_profile": "native_dflash",
     "blockers": [
       "Target LoRA: pinned nemo_rl/models/megatron/setup.py constructs Bridge LoRA on fused linear_qkv/linear_fc1. This shares input factors across Q/K/V and gate/up, unlike seven independent PEFT rank-64 adapters. Canonical injection, merged vLLM refit and checkpoint round-trip have not been integrated/validated.",

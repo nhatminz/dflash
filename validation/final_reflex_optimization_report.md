@@ -2,7 +2,7 @@
 
 Bản sửa được áp dụng trực tiếp vào project hiện có. **83 kiểm thử qua, không skip; chưa xác minh production B200/NeMo GRPO.** Chỉ thay đổi trong `dflash/` và patch dependency do project quản lý. SHA của 439 file nguồn SpecNaacl trước/sau trùng nhau; ba upstream commit giữ nguyên. Không chạy pretrain đầy đủ, GRPO dài hoặc sweep siêu tham số.
 
-`FAIRNESS_PROFILE=specnaacl_matched` mặc định **thất bại preflight có chủ đích**. Backend đã pin chưa hỗ trợ đầy đủ LoRA độc lập/cadence/lọc mẫu yêu cầu. Cấu hình chạy được ở mức resolver là `native_dflash`, vẫn full fine-tune target và không được coi tương đương hoàn toàn SpecNaacl.
+Mặc định hiện tại là `FAIRNESS_PROFILE=native_dflash`. Đặt rõ `specnaacl_matched` vẫn **thất bại preflight có chủ đích**: backend đã pin chưa hỗ trợ đầy đủ LoRA độc lập/cadence/lọc mẫu yêu cầu. Native vẫn full fine-tune target và không được coi tương đương hoàn toàn SpecNaacl. Thay đổi mặc định không thay đổi các số đo kiểm thử/benchmark trong báo cáo này.
 
 ## A. Những lỗi và bất biến đã xử lý
 
@@ -251,7 +251,7 @@ Native recipe cũ/resume checkpoint cũ: `GRPO_OBJECTIVE=original_nemo BETA=0 EP
 
 ## E. Lệnh matched chính xác và kết quả mong đợi
 
-Các lệnh sau hiện **phải thất bại preflight**, không phải lệnh train đã được hỗ trợ. Default matched không có fallback âm thầm sang native.
+Các lệnh sau hiện **phải thất bại preflight**, không phải lệnh train đã được hỗ trợ. Profile matched được chọn rõ không có fallback âm thầm sang native; mặc định hiện tại là native.
 
 ```bash
 python3 -S scripts/compare_specnaacl_config.py \

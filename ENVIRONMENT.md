@@ -113,9 +113,9 @@ on RTX 3090; it does not certify the production CUDA-13 stack. The new
 `reference_qwen3_4b_config.json` records the official Qwen3-4B geometry (H=2560,
 V=151936); the benchmark accepts `--model-config` to read your actual local file.
 
-`FAIRNESS_PROFILE=specnaacl_matched` fails before loading models because the
-pinned joint backend is not cross-framework equivalent. Use the explicit
-`native_dflash` profile for actual training. See the final report for native,
+`FAIRNESS_PROFILE=native_dflash` is the default for actual training.
+Explicit `specnaacl_matched` fails before loading models because the
+pinned joint backend is not cross-framework equivalent. See the final report for native,
 strict matched failure, paired measurement, and old-checkpoint commands.
 
 Regenerate and check managed patches after fetching dependencies:

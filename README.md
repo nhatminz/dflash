@@ -18,14 +18,14 @@ This is an implementation with bounded correctness tests, not a measured
 B200 speedup or a claim of completed production qualification.
 
 
-**Final correctness update:** `FAIRNESS_PROFILE=specnaacl_matched` is the
-intentional default and **fails preflight** on this pinned integration. Seven
+**Final correctness update:** `FAIRNESS_PROFILE=native_dflash` is the default
+for all launchers. Explicit `specnaacl_matched` **fails preflight** on this pinned integration. Seven
 independent target LoRA adapters, the requested four-rollout target cadence,
 and target-only constant-reward filtering are not equivalent to the joint
 Megatron recipe. A successful dry run never conceals these blockers. The local
 SpecNaacl source actually steps its target on each nonempty filtered rollout;
 `ACCUMULATION_STEPS=4` contributes to its step label, not a four-rollout readiness
-condition. Use the explicitly non-equivalent `native_dflash` profile to run.
+condition. The native profile is not fully equivalent to SpecNaacl.
 
 The revised native objective maps `BETA=.04`, `EPSILON=.1` into the real loss,
 uses a sequence mean and SpecNaacl's k3 gradient without NeMo's score factor.
@@ -71,7 +71,8 @@ Primary sources: [issue #3698](https://github.com/NVIDIA-NeMo/RL/issues/3698),
 
 ```bash
 cd dflash
-export FAIRNESS_PROFILE=native_dflash
+# Clear an old shell override to use the native_dflash default:
+unset FAIRNESS_PROFILE
 DRY_RUN=true bash train_qwen3_4b.sh
 # On the CUDA-13/B200 host, install once:
 bash scripts/setup_environment.sh
@@ -167,7 +168,7 @@ PYTHONPATH="$PWD" .venv-vllm/bin/python scripts/benchmark_reflex_hotpath.py \
   --requests 1 8 32 64 --repeats 15 \
   --output outputs/benchmarks/b200_hotpath.json \
   --cache outputs/benchmarks/b200_dispatch.json
-FAIRNESS_PROFILE=native_dflash OPD_DISPATCH_CACHE="$PWD/outputs/benchmarks/b200_dispatch.json" \
+OPD_DISPATCH_CACHE="$PWD/outputs/benchmarks/b200_dispatch.json" \
   bash train_qwen3_4b.sh
 ```
 

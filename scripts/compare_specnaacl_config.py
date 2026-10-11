@@ -31,7 +31,7 @@ def resolve_environment(root, model, environment):
     return dict(item.decode().split("=", 1) for item in data.split(b"\0") if item)
 
 
-def compare(model="qwen3_4b", dataset="simplelr", profile="specnaacl_matched"):
+def compare(model="qwen3_4b", dataset="simplelr", profile="native_dflash"):
     specroot = ROOT.parent / "SpecNaacl"
     base = dict(os.environ, DATASET=dataset, FAIRNESS_PROFILE=profile)
     se = resolve_environment(
@@ -456,7 +456,7 @@ def main():
     p.add_argument("--model", choices=["qwen3_1p7b", "qwen3_4b", "qwen3_8b"], default="qwen3_4b")
     p.add_argument("--dataset", choices=["simplelr", "gsm8k", "dapo"], default="simplelr")
     p.add_argument(
-        "--profile", choices=["specnaacl_matched", "native_dflash"], default="specnaacl_matched"
+        "--profile", choices=["specnaacl_matched", "native_dflash"], default="native_dflash"
     )
     p.add_argument("--output", default=str(ROOT / "validation/fairness_config_matrix.json"))
     args = p.parse_args()

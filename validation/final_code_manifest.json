@@ -1,6 +1,6 @@
 {
   "SOURCE_MANIFEST.json": "5a138b7914a3df2840125c0378e1b2b578ac75f8aec9831aab357f16b2ac99f5",
-  "configs/_shared/b200_common.env": "a9f654b9a0b624b6f168f47bf4e0904d375c32a6aa988418e1bada2ee12eee25",
+  "configs/_shared/b200_common.env": "2574002aafc0689f515030d686e5d5e6337e68625c764ffb816115c89c4c6f41",
   "configs/qwen3_1p7b/b200.env": "6b8be1cc3e277825c214eb0ff47a8aa9c9d55672141f526f3433b71e78860deb",
   "configs/qwen3_4b/b200.env": "6748093da0e9ad310e5e055172b2e8c3c6204e6629b02ef696b213a88d1777c0",
   "configs/qwen3_8b/b200.env": "a8921010f3ca50a110e81cbbe6189f4d8b35f26f0395af5e6ae82e91b11172ac",
@@ -29,7 +29,7 @@
   "patches/vllm.patch": "cb5c15675a1f5e6ebf383488871436491c49ae635f59906ce25f5ee400aaf57c",
   "scripts/benchmark_reflex_hotpath.py": "8ebec3f67524fdfa97054ff1c36eee9a2c8c6ef2d4fbead44b154b2ad09fe725",
   "scripts/benchmark_rollout.py": "ce4bc24badbf69a5424bd239907f6c72fb033e10d5e84fefe33ba137dbbb1e89",
-  "scripts/compare_specnaacl_config.py": "35f7e3d0aba0912eba8569faec2249b1283cf4da873f79c2c10fc0e370365535",
+  "scripts/compare_specnaacl_config.py": "ffc61465de34594e44491c0c2dcff3ad8a9fbad52ea2703790ee2ae88e4b151e",
   "scripts/fetch_sources.py": "03d1b7211c458a46d891376a9cac972c41340164914b3e7dbc756c072cfc23bc",
   "scripts/launch/common.sh": "fc79f27f983ab32ff7ffc11c6f35d5060dd9b065fa8f146898c843ff7c1fa1fd",
   "scripts/launch/pretrain_model.sh": "f289ff6b44c2f9e73a72577e690ad2d0b73b7c2e51e78b5d2f1abc899772c653",

@@ -1,8 +1,8 @@
 {
   "model": "qwen3_4b",
   "dataset": "simplelr",
-  "profile": "specnaacl_matched",
-  "supported": false,
+  "profile": "native_dflash",
+  "supported": true,
   "strict_cross_framework_equivalence": false,
   "SpecNaacl_model_config_present": true,
   "blockers": [
