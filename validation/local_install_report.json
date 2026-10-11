@@ -1,0 +1,167 @@
+{
+  "ready": true,
+  "target": "linux-x86_64-cpython313-cu130",
+  "artifact_verification": "passed: install_local_packages.py --check-only",
+  "external_wheels": [
+    {
+      "package": "torch",
+      "path": "offline_packages/wheels/torch-2.11.0+cu130-cp313-cp313-manylinux_2_28_x86_64.whl",
+      "bytes": 531149744,
+      "sha256": "554461b76f21211927c776056bcb0b00fb42972364794b686d768ebb0b586366"
+    },
+    {
+      "package": "torchvision",
+      "path": "offline_packages/wheels/torchvision-0.26.0+cu130-cp313-cp313-manylinux_2_28_x86_64.whl",
+      "bytes": 7521803,
+      "sha256": "441a98bed4fff1d54b8450499e377e1a605bec31f2ecb1a38a340f95dcc83897"
+    },
+    {
+      "package": "triton",
+      "path": "offline_packages/wheels/triton-3.6.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+      "bytes": 188277408,
+      "sha256": "0075039ff27765480083b1a109999bf27110f3542f1f9fad95f0f9065a36da79"
+    },
+    {
+      "package": "flash-attn",
+      "path": "offline_packages/wheels/flash_attn-2.8.1+cu13torch2.10cxx11abiTRUE-cp313-cp313-linux_x86_64.whl",
+      "bytes": 124568721,
+      "sha256": "a14fea157eb61dfee56f605a24a7a6150704517759125b3942dd04bffa05d6cf"
+    },
+    {
+      "package": "flashinfer-jit-cache",
+      "path": "offline_packages/wheels/flashinfer_jit_cache-0.6.8.post1+cu130-cp39-abi3-manylinux_2_28_x86_64.whl",
+      "bytes": 2090910620,
+      "sha256": "d060f085318d1f55278ce42724fd58e2d4fa2e34b6135e7f6982e1ea374fac6a"
+    },
+    {
+      "package": "flashinfer-jit-cache",
+      "path": "offline_packages/wheels/flashinfer_jit_cache-0.6.13+cu130-cp39-abi3-manylinux_2_28_x86_64.whl",
+      "bytes": 1533378463,
+      "sha256": "99d59b3ea32997fdb5f6c4898019611c751f96a0a4f5cc8be32efd058c1d2c46"
+    },
+    {
+      "package": "vllm",
+      "path": "offline_packages/wheels/vllm-0.25.1-cp38-abi3-manylinux_2_28_x86_64.whl",
+      "bytes": 250100306,
+      "sha256": "16fc7a28df1576eb6f7ca0455026551b8f9adb674c19c66059359ef3e964bd1e"
+    }
+  ],
+  "external_wheel_bytes": 4725907065,
+  "python": {
+    "path": "offline_packages/cpython-3.13.16+20261009-x86_64-unknown-linux-gnu-install_only.tar.gz",
+    "sha256": "1cca1041f693f110a2e0d16417090b8996258c7a121e90eeab66c2f40ea407f2",
+    "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261009/cpython-3.13.16%2B20261009-x86_64-unknown-linux-gnu-install_only.tar.gz"
+  },
+  "git_dependencies": {
+    "nemo-lens": {
+      "url": "https://github.com/NVIDIA-NeMo/Lens.git",
+      "commit": "b85578fc2b736a1804705e537001b5f45e9c715d",
+      "version": "0.2.0+b85578f",
+      "path": "offline_packages/sources/nemo-lens"
+    },
+    "transferqueue": {
+      "url": "https://github.com/Ascend/TransferQueue.git",
+      "commit": "c51614308b68c8d7a87c9b3ef62d59e14c69bde2",
+      "version": "0.1.9",
+      "path": "offline_packages/sources/transferqueue"
+    },
+    "causal-conv1d": {
+      "url": "https://github.com/Dao-AILab/causal-conv1d",
+      "commit": "4f6ae4e26ae5fe8af9372f8d312ab25cc4595223",
+      "version": "1.5.4",
+      "path": "offline_packages/sources/causal-conv1d"
+    },
+    "deep-ep": {
+      "url": "https://github.com/deepseek-ai/DeepEP.git",
+      "commit": "17cfb817bccec3a9c247013360cc550c2bac441e",
+      "version": "1.2.1+17cfb81",
+      "path": "offline_packages/sources/deep-ep"
+    },
+    "emerging-optimizers": {
+      "url": "https://github.com/NVIDIA-NeMo/Emerging-Optimizers.git",
+      "commit": "b309e2f01cda75dc96a6dc1a2355a7b3b64b5e16",
+      "version": "0.3.0",
+      "path": "offline_packages/sources/emerging-optimizers"
+    },
+    "fast-hadamard-transform": {
+      "url": "https://github.com/Dao-AILab/fast-hadamard-transform.git",
+      "commit": "f134af63deb2df17e1171a9ec1ea4a7d8604d5ca",
+      "version": "1.1.0",
+      "path": "offline_packages/sources/fast-hadamard-transform"
+    },
+    "flash-mla": {
+      "url": "https://github.com/deepseek-ai/FlashMLA",
+      "commit": "b7643bd54521f563b839b98289b5cd048c062ba2",
+      "version": "1.0.0+b7643bd",
+      "path": "offline_packages/sources/flash-mla"
+    },
+    "mamba-ssm": {
+      "url": "https://github.com/state-spaces/mamba.git",
+      "commit": "a14b1dff0454a3bc27d9eb31355dc01e4b2490ec",
+      "version": "2.2.6.post3",
+      "path": "offline_packages/sources/mamba-ssm"
+    },
+    "nvidia-modelopt": {
+      "url": "https://github.com/NVIDIA/Model-Optimizer",
+      "commit": "c3b913b9cc1d82d5a0af9fa77b4db87829e6f158",
+      "version": "0.46.0.dev86+gc3b913b9c",
+      "path": "offline_packages/sources/nvidia-modelopt"
+    },
+    "nvidia-resiliency-ext": {
+      "url": "https://github.com/NVIDIA/nvidia-resiliency-ext.git",
+      "commit": "6c5f2a13c7688d92a7ac7ee6e464721eb8b7345d",
+      "version": "0.6.0",
+      "path": "offline_packages/sources/nvidia-resiliency-ext"
+    },
+    "torch-memory-saver": {
+      "url": "https://github.com/fzyzcjy/torch_memory_saver.git",
+      "commit": "9bc9a442e6d108c7b7903def199896a005143aaf",
+      "version": "0.0.10b1",
+      "path": "offline_packages/sources/torch-memory-saver"
+    },
+    "transformer-engine": {
+      "url": "https://github.com/NVIDIA/TransformerEngine.git",
+      "commit": "42b840051647eef89761a16dfdff87e82bb253ab",
+      "version": "2.15.0+42b8400",
+      "path": "offline_packages/sources/transformer-engine"
+    },
+    "deep-gemm": {
+      "url": "https://github.com/deepseek-ai/DeepGEMM.git",
+      "commit": "67fc64863d43521080bf2005e6528d0fceee9510",
+      "version": "2.5.0",
+      "path": "offline_packages/sources/deep-gemm"
+    }
+  },
+  "source_revisions": {
+    "nemo-rl": "c18e462adf34739951b3d21773f436eaee324b31",
+    "vllm": "752a3a504485790a2e8491cacbb35c137339ad34",
+    "original-dflash": "07ebd93db9f472af339b644bb70221ad8428328a"
+  },
+  "specnaacl_unchanged": true,
+  "versions_lock_modified": false,
+  "uv_lock_modified": false,
+  "tests": {
+    "tests": 104,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "junit": "validation/local_install_tests.xml"
+  },
+  "ruff_check": "passed",
+  "ruff_format": "passed",
+  "shell_syntax": "passed",
+  "bridge_build_probe": {
+    "python": "3.13.16",
+    "version": "0.7.0+b11414c",
+    "wheel": "outputs/local_install_build_probe/wheels/megatron_bridge-0.7.0+b11414c-py3-none-any.whl",
+    "sha256": "f02a2097657261d3faa3ce25c38c2430dd965303a5fbdbb65228942d2d40fbe5",
+    "metadata_exception": "Only pinned Megatron-Bridge uses --ignore-requires-python: declares <3.13 while NeMo root requires >=3.13.14"
+  },
+  "b200_full_install_executed": false,
+  "cuda13_extension_builds_executed": false,
+  "limitations": [
+    "Other PyPI packages still require the configured reachable package index.",
+    "Pinned CUDA-only Git packages are staged as source and must build on B200 with the CUDA 13 development toolchain.",
+    "Build/runtime ABI compatibility, including pinned FlashAttention, must pass the final runtime probe on B200."
+  ]
+}

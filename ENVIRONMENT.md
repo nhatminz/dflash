@@ -22,6 +22,11 @@ libraries; bare CUDA runtime images are insufficient.
 
 ## Install once on the GPU host
 
+If the GPU host reaches pip/PyPI but cannot reach GitHub, use the staged
+wheel/source procedure in [OFFLINE.md](OFFLINE.md) and
+`bash scripts/setup_environment.sh --local-packages`. The ordinary command
+below fetches remote sources and requires access to those hosts.
+
 ```bash
 cd dflash
 command -v uv

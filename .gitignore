@@ -11,4 +11,5 @@ third_party/original-dflash/
 outputs/
 .cache/
 cache/
+offline_packages/
 *_cache/

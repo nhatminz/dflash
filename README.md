@@ -11,6 +11,11 @@ Read [huongdanchay.md](huongdanchay.md) for Vietnamese commands,
 [IMPLEMENTATION_REPORT.md](IMPLEMENTATION_REPORT.md) for integration details
 and the limits of validation.
 
+For a B200 host with pip index access but blocked GitHub, transfer the staged
+external wheels and pinned source checkouts in `offline_packages/` and
+`third_party/`, then use `setup_environment.sh --local-packages`.
+See [OFFLINE.md](OFFLINE.md) for the complete transfer and install commands.
+
 **Validation status:** CPU tests and CUDA kernel/tiny DFlash tests have run on
 an RTX 3090. The full CUDA 13 NeMo/Megatron/vLLM training path has not run here:
 the machine lacks that runtime, B200, and the specified local models/data.
