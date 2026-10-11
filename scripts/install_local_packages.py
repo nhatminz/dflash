@@ -124,6 +124,43 @@ def source_build_options(line, plan, env, no_isolation):
     return flags + shlex.split(line), source_env
 
 
+def compiler_environment(env):
+    """Override Python's build-time compiler defaults with installed compilers.
+
+    A standalone Python can name clang/clang++ in sysconfig even on a host
+    that only provides GCC. Explicit, executable CC/CXX commands take priority.
+    """
+    result = env.copy()
+    search_path = env.get("PATH", os.defpath)
+    for variable in ("CC", "CXX"):
+        if not env.get(variable):
+            continue
+        try:
+            command = shlex.split(env[variable])
+        except ValueError as error:
+            raise RuntimeError(f"Invalid {variable}: {error}") from None
+        if not command or not shutil.which(command[0], path=search_path):
+            raise RuntimeError(
+                f"{variable}={env[variable]!r} is not executable on this host. "
+                "Set CC/CXX to installed C/C++ compilers, or unset both for automatic selection."
+            )
+    if not all(result.get(key) for key in ("CC", "CXX")):
+        for c_name, cxx_name in (("gcc", "g++"), ("clang", "clang++"), ("cc", "c++")):
+            c = result.get("CC") or shutil.which(c_name, path=search_path)
+            cxx = result.get("CXX") or shutil.which(cxx_name, path=search_path)
+            if c and cxx:
+                result.update(CC=c, CXX=cxx)
+                break
+        else:
+            raise RuntimeError(
+                "No usable C/C++ compiler pair found (gcc/g++, clang/clang++, cc/c++). "
+                "Expose an installed development toolchain on PATH or set CC and CXX. "
+                "These are system compilers, not Python pip dependencies."
+            )
+    print(f"Local source compilers: CC={result['CC']}, CXX={result['CXX']}", flush=True)
+    return result
+
+
 def resiliency_cupti_environment(python, env):
     """Expose the target environment's pinned CUPTI to NRX's isolated build.
 
@@ -215,6 +252,8 @@ def main():
     if args.check_only:
         print("All staged external wheels, Python, sources and recursive submodules verified.")
         return
+    # Propagate into every backend and isolated PEP-517 build, before any install.
+    env = compiler_environment(env)
     runtime = destination / "runtime"
     python = runtime / "python/bin/python3.13"
     if not python.is_file():

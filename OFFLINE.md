@@ -123,6 +123,25 @@ Chỉ source activation sau khi setup thành công:
 bash scripts/setup_environment.sh --local-packages && source offline_packages/activate.sh
 ```
 
+Nếu build báo `No such file or directory: 'clang++'`, compiler được chọn không
+có trên máy. Installer mới đặt `CC`/`CXX` rõ ràng cho mọi backend và build
+isolation: ưu tiên `gcc`/`g++`, rồi `clang`/`clang++`, rồi `cc`/`c++` có trong
+`PATH`. Nó giữ cấu hình `CC`/`CXX` do bạn đặt nếu executable tồn tại; cấu hình
+sai sẽ báo lỗi trước khi cài package. Bản sửa có trong
+`dflash_b200_compiler_fix.zip` (đã bao gồm bản sửa CUPTI).
+
+Nếu máy đã có GCC, cũng có thể chạy lại ngay với installer cũ:
+
+```bash
+export CC="$(command -v gcc)"
+export CXX="$(command -v g++)"
+if [[ -n "$CC" && -n "$CXX" ]]; then
+  bash scripts/setup_environment.sh --local-packages && source offline_packages/activate.sh
+else
+  echo "Cần C/C++ compiler trong PATH; chưa tìm thấy gcc/g++."
+fi
+```
+
 ```bash
 cd /workspace/storage-shared/nlp/minhpn19/dflash
 export CUDA_HOME="${CUDA_HOME:-/usr/local/cuda}"

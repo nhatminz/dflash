@@ -1,0 +1,25 @@
+{
+  "issue": "nvidia-resiliency-ext isolated C++ build invokes unavailable clang++",
+  "change": "Select installed CC/CXX before installation and pass them into every backend and isolated build; preserve valid explicit compiler commands",
+  "default_priority": [
+    "gcc/g++",
+    "clang/clang++",
+    "cc/c++"
+  ],
+  "versions_lock_sha256_unchanged": "316e522bf4578a5856bd0cab8d5a158aa9a2579359b2339fa30333baad783b4d",
+  "tests": {
+    "tests": "15",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0"
+  },
+  "cpp_build_probe": "Missing Python sysconfig compiler reproduced; selected host compilers built a C++17 Python extension and fresh process imported it successfully",
+  "cupti_link_load_regression": "passed in the same targeted test suite",
+  "lint_format_shell_syntax": "passed",
+  "limitation": "Host Python 3.12 regression tests; complete Python 3.13 / CUDA 13 / B200 installation has not run on this host",
+  "files_sha256": {
+    "scripts/install_local_packages.py": "e976e32317c41af863067ea5158f22db525bd5916e37065b72dedc1e8ff17785",
+    "tests/test_local_install.py": "9faf9a30852a7310323b5b0b1444a208635e67da720405c3697dd0603af7a09a",
+    "OFFLINE.md": "292327fee5bfe5c3ca055e4ceb0c8b136e1f4bdfbdb194ffbabbb19afe605990"
+  }
+}

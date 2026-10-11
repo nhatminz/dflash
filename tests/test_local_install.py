@@ -167,6 +167,87 @@ def test_shallow_sources_keep_locked_versions_and_upstream_build_isolation(monke
     assert env == {"PATH": "/fixture"}
 
 
+def test_compiler_selection_on_gcc_only_host(tmp_path, monkeypatch):
+    module = load_script("install_local_packages", monkeypatch)
+    for name in ("gcc", "g++"):
+        executable = tmp_path / name
+        executable.write_text("#!/bin/sh\nexit 0\n")
+        executable.chmod(0o755)
+    env = {"PATH": str(tmp_path), "CFLAGS": "-O2"}
+    result = module.compiler_environment(env)
+    assert result["CC"] == str(tmp_path / "gcc")
+    assert result["CXX"] == str(tmp_path / "g++")
+    assert result["CFLAGS"] == "-O2"
+    assert env == {"PATH": str(tmp_path), "CFLAGS": "-O2"}
+
+
+def test_compiler_selection_preserves_explicit_commands_and_flags(tmp_path, monkeypatch):
+    module = load_script("install_local_packages", monkeypatch)
+    compiler = tmp_path / "custom compiler"
+    compiler.write_text("#!/bin/sh\nexit 0\n")
+    compiler.chmod(0o755)
+    env = {"PATH": "", "CC": shlex.quote(str(compiler)), "CXX": shlex.quote(str(compiler)) + " -O2"}
+    assert module.compiler_environment(env) == env
+
+
+@pytest.mark.parametrize("explicit", [None, "missing-clang++", "'unterminated"])
+def test_compiler_selection_missing_or_invalid_fails_early(tmp_path, monkeypatch, explicit):
+    module = load_script("install_local_packages", monkeypatch)
+    env = {"PATH": str(tmp_path)}
+    if explicit is not None:
+        env["CXX"] = explicit
+    with pytest.raises(RuntimeError, match="compiler|CXX"):
+        module.compiler_environment(env)
+
+
+def test_cpp_extension_build_overrides_unavailable_python_compiler(tmp_path, monkeypatch):
+    module = load_script("install_local_packages", monkeypatch)
+    env = dict(os.environ)
+    env.pop("CC", None)
+    env.pop("CXX", None)
+    env = module.compiler_environment(env)
+    (tmp_path / "probe.cpp").write_text(
+        "#include <Python.h>\n#include <vector>\n"
+        "static PyObject* value(PyObject*, PyObject*) { std::vector<int> v{13}; "
+        "return PyLong_FromLong(v.at(0)); }\n"
+        'static PyMethodDef methods[] = {{"value", value, METH_NOARGS, nullptr}, '
+        "{nullptr, nullptr, 0, nullptr}};\n"
+        'static PyModuleDef mod = {PyModuleDef_HEAD_INIT, "compiler_probe", '
+        "nullptr, -1, methods};\n"
+        "PyMODINIT_FUNC PyInit_compiler_probe() { return PyModule_Create(&mod); }\n"
+    )
+    (tmp_path / "setup.py").write_text(
+        "from setuptools import setup, Extension\n"
+        "from setuptools._distutils import sysconfig\n"
+        "sysconfig.get_config_vars().update(CC='unavailable-clang', "
+        "CXX='unavailable-clang++', LDSHARED='unavailable-clang -shared', "
+        "LDCXXSHARED='unavailable-clang++ -shared')\n"
+        "setup(name='compiler-probe', ext_modules=[Extension('compiler_probe', "
+        "['probe.cpp'], language='c++', extra_compile_args=['-std=c++17'])])\n"
+    )
+    # The broken sysconfig defaults really fail without the installer override.
+    broken_env = env.copy()
+    broken_env.pop("CC")
+    broken_env.pop("CXX")
+    failed = subprocess.run(
+        [sys.executable, "setup.py", "build_ext", "--inplace"],
+        cwd=tmp_path,
+        env=broken_env,
+        capture_output=True,
+        text=True,
+    )
+    assert failed.returncode and "unavailable-clang" in failed.stderr
+    subprocess.run(
+        [sys.executable, "setup.py", "build_ext", "--inplace"], cwd=tmp_path, env=env, check=True
+    )
+    subprocess.run(
+        [sys.executable, "-c", "import compiler_probe; assert compiler_probe.value() == 13"],
+        cwd=tmp_path,
+        env=env,
+        check=True,
+    )
+
+
 def cupti_fixture(tmp_path):
     site = tmp_path / "site"
     cuda = site / "nvidia/cu13"
