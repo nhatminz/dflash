@@ -1,0 +1,69 @@
+{
+  "request": "User explicitly requested physical pretraining batch 8 and gradient accumulation 4 for all six Qwen experiment models.",
+  "configuration": {
+    "qwen25_1p5b": {
+      "batch_per_gpu": 8,
+      "accumulation": 4,
+      "effective_batch_one_gpu": 32
+    },
+    "qwen25_3b": {
+      "batch_per_gpu": 8,
+      "accumulation": 4,
+      "effective_batch_one_gpu": 32
+    },
+    "qwen25_7b": {
+      "batch_per_gpu": 8,
+      "accumulation": 4,
+      "effective_batch_one_gpu": 32
+    },
+    "qwen25_14b": {
+      "batch_per_gpu": 8,
+      "accumulation": 4,
+      "effective_batch_one_gpu": 32
+    },
+    "qwen3_1p7b": {
+      "batch_per_gpu": 8,
+      "accumulation": 4,
+      "effective_batch_one_gpu": 32
+    },
+    "qwen3_4b": {
+      "batch_per_gpu": 8,
+      "accumulation": 4,
+      "effective_batch_one_gpu": 32
+    }
+  },
+  "grpo_changed": false,
+  "optional_qwen3_8b_changed": false,
+  "fairness_change": "All six effective pretrain batches are now 32/GPU; Qwen2.5 previous batches 16/8/4/2 and Qwen3 previous batch8 no longer match. Match both projects explicitly for controlled comparisons.",
+  "provided_log": {
+    "samples_or_batches_with_batch1": 67596,
+    "shown_batches_completed": 277,
+    "shown_optimizer_step": 17,
+    "shown_loss": 10.4906,
+    "runtime_valid": true,
+    "assessment": "Docstring messages from Transformers auto_docstring print missing loss/logits documentation; no training exception appears in the provided excerpt. Other import-time warnings do not stop this run. This does not guarantee all later training steps."
+  },
+  "docstring_primary_source": "https://raw.githubusercontent.com/huggingface/transformers/v5.12.1/src/transformers/utils/auto_docstring.py",
+  "one_gpu_example": {
+    "samples": 67596,
+    "batches_per_epoch": 8450,
+    "optimizer_steps_per_epoch": 2113,
+    "last_update_microbatches": 2
+  },
+  "tests": {
+    "passed": 57,
+    "failed": 0,
+    "command": ".venv-test/bin/python -m pytest tests/test_launchers.py tests/test_qwen25_support.py tests/test_training.py tests/test_resume.py -q",
+    "junit": "validation/pretrain_batch8_tests.xml"
+  },
+  "checks": {
+    "ruff": "passed",
+    "format": "passed",
+    "bash_env_syntax": "passed",
+    "git_diff_check": "passed"
+  },
+  "limitations": [
+    "Batch8 GPU pretraining and VRAM usage were not tested on B200 by this transfer host.",
+    "Changing batch/accumulation requires a new run; the existing resume contract intentionally rejects changed values."
+  ]
+}

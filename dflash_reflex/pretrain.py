@@ -82,8 +82,8 @@ def main():
     p.add_argument("--model-key", required=True)
     p.add_argument("--epochs", type=int, default=5)
     p.add_argument("--lr", type=float, default=5e-5)
-    p.add_argument("--batch-size", type=int, default=1)
-    p.add_argument("--accumulation", type=int, default=8)
+    p.add_argument("--batch-size", type=int, default=8)
+    p.add_argument("--accumulation", type=int, default=4)
     p.add_argument("--max-length", type=int, default=2048)
     p.add_argument("--max-samples", type=int, default=0)
     p.add_argument("--max-steps", type=int, default=0)
@@ -178,7 +178,16 @@ def main():
         generator=torch.Generator().manual_seed(a.seed),
         persistent_workers=a.workers > 0,
     )
-    total_steps = a.epochs * math.ceil(len(loader) / a.accumulation)
+    steps_per_epoch = math.ceil(len(loader) / a.accumulation)
+    total_steps = a.epochs * steps_per_epoch
+    if rank == 0:
+        print(
+            f"DFlash pretrain: samples={len(rows)}, batch_size_per_gpu={a.batch_size}, "
+            f"world_size={world}, accumulation={a.accumulation}, "
+            f"effective_global_batch={a.batch_size * a.accumulation * world}, "
+            f"batches_per_epoch={len(loader)}, optimizer_steps_per_epoch={steps_per_epoch}",
+            flush=True,
+        )
     warmup = min(500, max(1, int(0.05 * total_steps)))
     scheduler = torch.optim.lr_scheduler.LambdaLR(
         optimizer,

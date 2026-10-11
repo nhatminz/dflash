@@ -122,20 +122,24 @@ local chạy trước khi cấp phát weights lên GPU.
 
 | MODEL_KEY | Target dưới `/workspace/storage-shared/models/` | Batch GRPO × accumulation | Pretrain batch × accumulation |
 |---|---|---|---|
-| `qwen25_1p5b` | `Qwen2.5-1.5B-Instruct` | 16 × 2 | 1 × 16 |
-| `qwen25_3b` | `Qwen2.5-3B-Instruct` | 8 × 4 | 1 × 8 |
-| `qwen25_7b` | `Qwen2.5-7B-Instruct` | 8 × 4 | 1 × 4 |
-| `qwen25_14b` | `Qwen2.5-14B-Instruct` | 4 × 8 | 1 × 2 |
-| `qwen3_1p7b` | `Qwen3-1.7B` | 16 × 2 | 1 × 8 |
-| `qwen3_4b` | `Qwen3-4B` | 8 × 4 | 1 × 8 |
+| `qwen25_1p5b` | `Qwen2.5-1.5B-Instruct` | 16 × 2 | 8 × 4 |
+| `qwen25_3b` | `Qwen2.5-3B-Instruct` | 8 × 4 | 8 × 4 |
+| `qwen25_7b` | `Qwen2.5-7B-Instruct` | 8 × 4 | 8 × 4 |
+| `qwen25_14b` | `Qwen2.5-14B-Instruct` | 4 × 8 | 8 × 4 |
+| `qwen3_1p7b` | `Qwen3-1.7B` | 16 × 2 | 8 × 4 |
+| `qwen3_4b` | `Qwen3-4B` | 8 × 4 | 8 × 4 |
 
 Batch GRPO và accumulation lấy đúng cấu hình từng target của SpecNaacl.
-Pretrain Qwen2.5 dùng microbatch 1 để giới hạn VRAM; accumulation giữ batch
-hiệu dụng 16/8/4/2 như launcher pretrain thực tế của SpecNaacl (accumulation 1).
+Theo yêu cầu mới, pretrain cả sáu model dùng batch thực 8/GPU và accumulation
+4: batch hiệu dụng 32 mẫu cho một GPU. Cấu hình này khác batch hiệu dụng cũ
+16/8/4/2 của Qwen2.5 và 8 của Qwen3-1.7B/4B, đồng thời khác mặc định
+pretrain SpecNaacl. So sánh công bằng cần đặt cùng batch hiệu dụng ở cả hai
+dự án; mặc định mới ưu tiên cấu hình 8 × 4 do người dùng chọn.
 Không lấy các biến `DRAFT_PRETRAIN_*` mà launcher SpecNaacl không truyền vào CLI.
 Đây vẫn là loss
 DFlash, khác Medusa, và native target GRPO vẫn full fine-tuning. Các mặc định
-Qwen3 đã có được giữ nguyên để không đổi cấu hình resume cũ.
+GRPO không thay đổi trong lần chỉnh batch pretrain này. Batch mới yêu cầu run
+mới; không resume trực tiếp checkpoint có batch/accumulation cũ.
 
 ### Chạy đồng thời 6 model
 
@@ -147,6 +151,7 @@ model cụ thể phải được xóa, nếu không nó ghi đè đường dẫn
 cd /đường/dẫn/SpecDecode/dflash
 unset MODEL MODEL_KEY MODEL_ENV RUN_NAME RUN_DIR RESUME DRAFT_CHECKPOINT
 unset PRETRAIN_WARM_START FAIRNESS_PROFILE
+unset PRETRAIN_BATCH_SIZE PRETRAIN_ACCUMULATION_STEPS
 export NPROC_PER_NODE=1
 mkdir -p outputs/launch_logs
 CUDA_VISIBLE_DEVICES=0 bash pretrain_qwen25_1p5b.sh > outputs/launch_logs/qwen25_1p5b.log 2>&1 &
@@ -182,7 +187,7 @@ vocab Qwen3; đây không phải ID `<|fim_pad|>`.
 
 ```bash
 CUDA_VISIBLE_DEVICES=0 PRETRAIN_EPOCHS=5 PRETRAIN_LR=5e-5 \
-PRETRAIN_BATCH_SIZE=1 PRETRAIN_ACCUMULATION_STEPS=8 \
+PRETRAIN_BATCH_SIZE=8 PRETRAIN_ACCUMULATION_STEPS=4 \
 PRETRAIN_MAX_LENGTH=2048 PRETRAIN_SAVE_INTERVAL=500 \
 bash pretrain_qwen3_4b.sh
 ```
@@ -194,8 +199,8 @@ Thông số pretrain chính:
 | `PRETRAIN_DATASET` | `sharegpt` |
 | `PRETRAIN_DATASET_PATH` | file ShareGPT đã nêu |
 | `PRETRAIN_EPOCHS`, `PRETRAIN_LR` | 5, 5e-5 |
-| `PRETRAIN_BATCH_SIZE` | 1 trên mỗi GPU |
-| `PRETRAIN_ACCUMULATION_STEPS` | Qwen3: 8 cho 4B/1.7B, 16 cho 8B; Qwen2.5: 16/8/4/2 cho 1.5B/3B/7B/14B |
+| `PRETRAIN_BATCH_SIZE` | 8/GPU cho cả sáu model; Qwen3-8B tùy chọn giữ 1 |
+| `PRETRAIN_ACCUMULATION_STEPS` | 4 cho cả sáu model; Qwen3-8B tùy chọn giữ 16 |
 | `PRETRAIN_MAX_LENGTH` | 2048 |
 | `PRETRAIN_MAX_SAMPLES`, `PRETRAIN_MAX_STEPS` | 0 = không giới hạn |
 | `PRETRAIN_SAVE_INTERVAL` | 500 optimizer steps |
@@ -207,6 +212,11 @@ Thông số pretrain chính:
 BF16 dùng cho forward; master weights, gradient accumulation và Adam state
 dùng FP32. Tqdm hiển thị epoch, optimizer step, loss, LR, tokens, thời gian
 step và elapsed. Chỉ rank chính hiển thị progress.
+Thanh progress đếm batch DataLoader, khác optimizer step. Ví dụ 67.596 mẫu
+trên một GPU: batch 1 có 67.596 batch/epoch; batch 8 có 8.450 batch/epoch.
+Với accumulation 4, 8.450 batch tương ứng 2.113 optimizer step/epoch (lượt
+cuối dùng hai batch còn lại). Log đầu run in rõ các con số này. Tăng
+batch làm tăng VRAM và công việc mỗi lượt; không đảm bảo tốc độ tăng 8 lần.
 
 Checkpoint export mới nhất nằm tại:
 

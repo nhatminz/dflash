@@ -28,7 +28,17 @@ def test_six_pretrain_launchers_can_resolve_concurrently_without_shared_run_path
     environment = {
         k: v
         for k, v in os.environ.items()
-        if k not in {"MODEL", "MODEL_KEY", "MODEL_ENV", "RUN_DIR", "RUN_NAME", "RESUME"}
+        if k
+        not in {
+            "MODEL",
+            "MODEL_KEY",
+            "MODEL_ENV",
+            "RUN_DIR",
+            "RUN_NAME",
+            "RESUME",
+            "PRETRAIN_BATCH_SIZE",
+            "PRETRAIN_ACCUMULATION_STEPS",
+        }
     }
     processes = [
         subprocess.Popen(
@@ -53,6 +63,9 @@ def test_six_pretrain_launchers_can_resolve_concurrently_without_shared_run_path
         path = Path(stdout.splitlines()[0].removeprefix("Run directory: "))
         assert path.parent == tmp_path / "pretrain" / key
         assert "--nproc_per_node=1" in stdout
+        command = shlex.split(stdout.split("Command:", 1)[1])
+        assert command[command.index("--batch-size") + 1] == "8"
+        assert command[command.index("--accumulation") + 1] == "4"
         paths.append(path)
     assert len(set(paths)) == 6
     assert not list(tmp_path.iterdir())
@@ -113,8 +126,12 @@ def test_real_qwen25_geometry_and_native_configuration(model, tmp_path):
     spec_accum = int(spec_args[spec_args.index("--accumulation_steps") + 1])
     draft_batch = int(draft_args[draft_args.index("--batch-size") + 1])
     draft_accum = int(draft_args[draft_args.index("--accumulation") + 1])
-    assert draft_batch == 1
-    assert draft_batch * draft_accum == spec_batch * spec_accum
+    assert draft_batch == 8
+    assert draft_accum == 4
+    # The user explicitly chose batch8/accum4. Report the effective-batch
+    # difference from the actual SpecNaacl CLI instead of claiming parity.
+    ratio = {"qwen25_1p5b": 2, "qwen25_3b": 4, "qwen25_7b": 8, "qwen25_14b": 16}[model]
+    assert draft_batch * draft_accum == spec_batch * spec_accum * ratio
     result = subprocess.run(
         [
             sys.executable,

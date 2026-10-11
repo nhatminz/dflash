@@ -98,6 +98,12 @@ over the model config's default. Launchers reject recognized Qwen directory
 names belonging to another key before creating run files or checking CUDA.
 For custom directory names, the existing architecture/checkpoint validation
 still applies; the directory-name guard does not prove model size.
+The six-model pretraining default is now physical batch 8 per GPU, with
+accumulation 4 for all six models: effective batch 32 on one GPU, as requested.
+This changes their previous effective batches and no longer matches SpecNaacl
+pretraining defaults; align both projects explicitly for controlled comparisons.
+GRPO settings are unchanged. Start a new run when changing these settings;
+old checkpoints require their original batch/accumulation to resume.
 Qwen2.5 retains its original biased target attention. Its headless DFlash
 drafter is independently initialized with bias-free Qwen3-style attention,
 the target's hidden/head/GQA dimensions, and shared target embedding/LM head.
