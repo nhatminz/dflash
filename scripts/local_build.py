@@ -39,7 +39,9 @@ def cuda_build_environment(env, site_packages):
             f"Expected CUDA toolkit 13.0 to match locked Torch; {nvcc} reports:\n{version}"
         )
     result["CUDA_HOME"] = str(home)
-    result["PATH"] = str(home / "bin") + os.pathsep + env.get("PATH", os.defpath)
+    result["PATH"] = os.pathsep.join(
+        dict.fromkeys([str(home / "bin"), *env.get("PATH", os.defpath).split(os.pathsep)])
+    )
     # Match the pinned NeMo Dockerfile. NVCC knows this directory, but the
     # host C++ compiler does not implicitly search CUDA 13's include/cccl.
     candidates = [home / "include/cccl", Path(site_packages) / "nvidia/cu13/include/cccl"]
@@ -95,6 +97,99 @@ def cuda_build_environment(env, site_packages):
     print(f"CUDA source build: {nvcc}; CCCL={cccl}; MAX_JOBS={result['MAX_JOBS']}", flush=True)
     print("CUDA header roots: " + os.pathsep.join(map(str, includes)), flush=True)
     return result
+
+
+def deep_ep_build_environment(env, site_packages):
+    """Expose the locked NVTX library without replacing the CUDA toolkit.
+
+    HybridEP links -lnvtx3interop, while the CUDA-13 NVTX wheel contains
+    only libnvtx3interop.so.1. Keep the alias relative and reject conflicts.
+    """
+    result = cuda_build_environment(env, site_packages)
+    roots = [Path(p) for p in result["CPATH"].split(os.pathsep) if p]
+    for header in ("cuda_profiler_api.h", "nvtx3/nvToolsExt.h"):
+        if not any((root / header).is_file() for root in roots):
+            raise RuntimeError(f"DeepEP development header missing after setup: {header}")
+    library = Path(site_packages) / "nvidia/cu13/lib/libnvtx3interop.so.1"
+    if not library.is_file():
+        raise RuntimeError(
+            f"Missing locked nvidia-nvtx 13.0.85 library: {library}. "
+            "Restore this backend's locked registry requirements."
+        )
+    alias = library.with_name("libnvtx3interop.so")
+    if alias.is_symlink() or alias.exists():
+        if alias.resolve() != library.resolve():
+            raise RuntimeError(f"Conflicting NVTX linker alias: {alias}")
+    else:
+        alias.symlink_to(library.name)
+    previous = [p for p in env.get("LIBRARY_PATH", "").split(os.pathsep) if p]
+    result["LIBRARY_PATH"] = os.pathsep.join(dict.fromkeys([str(library.parent), *previous]))
+    # Both the setuptools host link and NVCC must find the wheel library.
+    # Include a relative RUNPATH because hybrid_ep_cpp is installed at the
+    # site-packages root and the project may move between shared mounts.
+    link_flags = [
+        "-L" + str(library.parent),
+        "-Wl,-rpath," + str(library.parent),
+        "-Wl,-rpath,$ORIGIN/nvidia/cu13/lib",
+    ]
+    flags = shlex.split(env.get("LDFLAGS", ""))
+    result["LDFLAGS"] = shlex.join(flags + [f for f in link_flags if f not in flags])
+    nvcc_flags = [
+        "-L" + str(library.parent),
+        "-Xlinker=-rpath",
+        "-Xlinker=" + str(library.parent),
+    ]
+    current = shlex.split(result["NVCC_PREPEND_FLAGS"])
+    # Append the entire argument group once. Keep the $ORIGIN form in
+    # LDFLAGS only: NVCC's environment flag parser does not accept shlex's
+    # single-quoted dollar expressions.
+    if current[-len(nvcc_flags) :] != nvcc_flags:
+        current += nvcc_flags
+    result["NVCC_PREPEND_FLAGS"] = shlex.join(current)
+    print(f"DeepEP profiler headers and NVTX linker library: {library}", flush=True)
+    return result
+
+
+def check_deep_ep_toolchain(python, env, log_dir):
+    """Compile/link the missing profiler API and NVTX before the full DeepEP build."""
+    log_dir = Path(log_dir)
+    log_dir.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="deep-ep-probe-", dir=log_dir) as temporary:
+        temporary = Path(temporary)
+        source, output = temporary / "probe.cu", temporary / "probe.so"
+        source.write_text(
+            "#include <cuda_profiler_api.h>\n#define NVTX_NO_IMPL\n"
+            "#include <nvtx3/nvToolsExt.h>\n"
+            'extern "C" auto profiler_api() { return &cudaProfilerStart; }\n'
+            'extern "C" auto nvtx_api() { return &nvtxRangePushA; }\n'
+            "__global__ void probe(float* x) { x[threadIdx.x] = 0.0f; }\n"
+        )
+        cc = shlex.split(env["CC"])
+        run_logged(
+            [
+                str(Path(env["CUDA_HOME"]) / "bin/nvcc"),
+                "-std=c++17",
+                "-arch=sm_100",
+                "-shared",
+                "-Xcompiler=-fPIC",
+                "-Xlinker=--no-undefined",
+            ]
+            + (["-ccbin", cc[0]] if len(cc) == 1 else [])
+            + [str(source), "-lcuda", "-lnvtx3interop", "-o", str(output)],
+            log_dir / "deep-ep-toolchain.log",
+            env=env,
+            cwd=temporary,
+        )
+        # A fresh process tests RUNPATH resolution, without executing CUDA APIs
+        # or a GPU kernel. Do not mask a missing dependency with LD_LIBRARY_PATH.
+        load_env = env.copy()
+        load_env.pop("LD_LIBRARY_PATH", None)
+        run_logged(
+            [str(python), "-c", "import ctypes, sys; ctypes.CDLL(sys.argv[1])", str(output)],
+            log_dir / "deep-ep-load.log",
+            env=load_env,
+            cwd=temporary,
+        )
 
 
 def first_build_error(log_path):

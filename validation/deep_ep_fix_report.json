@@ -1,0 +1,22 @@
+{
+  "diagnosis": "Pinned DeepEP HybridEP allocator includes cuda_profiler_api.h, absent from the CUDA development toolkit and upstream runtime lock.",
+  "fixes": [
+    "Install hash-pinned header-only nvidia-cuda-profiler-api==13.0.85 before DeepEP, from the bundled wheel without index access when present.",
+    "Expose locked NVTX 13.0.85 soname through a relative linker alias; scope LIBRARY_PATH, LDFLAGS/RUNPATH and NVCC flags to DeepEP.",
+    "Compile/link/load a CUDA 13.0 SM100 profiler/NVTX probe before the full source build."
+  ],
+  "upstream_runtime_pins_changed": false,
+  "deep_ep_commit": "17cfb817bccec3a9c247013360cc550c2bac441e",
+  "added_toolchain_requirement": "nvidia-cuda-profiler-api==13.0.85",
+  "test_results": {
+    "tests": "30",
+    "errors": "0",
+    "failures": "0",
+    "skipped": "0"
+  },
+  "real_artifact_validation": "validation/deep_ep_real_probe.json",
+  "limits": [
+    "Full DeepEP wheel build and production B200 runtime validation remain to run on the target machine."
+  ],
+  "versions_lock_sha256": "316e522bf4578a5856bd0cab8d5a158aa9a2579359b2339fa30333baad783b4d"
+}

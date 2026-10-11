@@ -19,7 +19,9 @@ from pathlib import Path
 
 from local_build import (
     check_cuda_toolchain,
+    check_deep_ep_toolchain,
     cuda_build_environment,
+    deep_ep_build_environment,
     pip_build_environment,
     run_logged,
 )
@@ -361,6 +363,31 @@ def main():
             options, source_env = source_build_options(line, plan, build_env, no_isolation)
             if name == "nvidia-resiliency-ext":
                 source_env = resiliency_cupti_environment(executable, source_env)
+            if name == "deep-ep":
+                # The CUDA runtime lock does not include profiler development
+                # headers. Install only this hash-pinned, header-only supplement;
+                # the small transfer patch also carries its wheel for no-index use.
+                wheels = destination / "toolchain_wheels"
+                supplement = [
+                    str(executable),
+                    "-m",
+                    "pip",
+                    "install",
+                    "--no-deps",
+                    "--require-hashes",
+                    "-r",
+                    str(ROOT / "requirements-build-cuda13.txt"),
+                ]
+                if any(wheels.glob("nvidia_cuda_profiler_api-13.0.85-*.whl")):
+                    supplement += ["--no-index", "--find-links", str(wheels)]
+                run_logged(
+                    supplement,
+                    logs / "deep-ep-headers.log",
+                    cwd=ROOT,
+                    env=pip_build_environment(source_env),
+                )
+                source_env = deep_ep_build_environment(source_env, site_packages)
+                check_deep_ep_toolchain(executable, source_env, logs)
             # pip streams the complete backend output with --verbose. uv's
             # failure summary can truncate the first compiler error behind
             # thousands of successful ptxas messages from another Ninja job.

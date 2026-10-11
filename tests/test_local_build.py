@@ -207,3 +207,107 @@ def test_toolchain_probe_stops_before_nvcc_if_host_headers_fail(tmp_path, module
             tmp_path,
         )
     assert len(calls) == 1 and calls[0][0] == "/usr/bin/g++"
+
+
+def deep_ep_fixture(tmp_path):
+    site = tmp_path / "site"
+    include = site / "nvidia/cu13/include"
+    include.mkdir(parents=True)
+    (include / "cuda_profiler_api.h").write_text("extern int cudaProfilerStart();\n")
+    (include / "nvtx3").mkdir()
+    (include / "nvtx3/nvToolsExt.h").write_text("extern int nvtxRangePushA(const char*);\n")
+    library = site / "nvidia/cu13/lib/libnvtx3interop.so.1"
+    library.parent.mkdir()
+    subprocess.run(
+        [
+            shutil.which("gcc"),
+            "-shared",
+            "-fPIC",
+            "-x",
+            "c",
+            "-",
+            "-Wl,-soname,libnvtx3interop.so.1",
+            "-o",
+            str(library),
+        ],
+        input="int nvtxRangePushA(const char* label) { return 13; }\n",
+        text=True,
+        check=True,
+    )
+    return site, include, library
+
+
+def test_deep_ep_nvtx_host_link_load_and_relocation(tmp_path, module):
+    site, _, library = deep_ep_fixture(tmp_path)
+    toolkit = toolkit_fixture(tmp_path)
+    env = dict(os.environ, CUDA_HOME=str(toolkit), LDFLAGS="-Wl,--no-undefined")
+    env.pop("CPATH", None)
+    env.pop("CPLUS_INCLUDE_PATH", None)
+    env.pop("LIBRARY_PATH", None)
+    fixed = module.deep_ep_build_environment(env, site)
+    assert module.deep_ep_build_environment(fixed, site) == fixed
+    alias = library.with_name("libnvtx3interop.so")
+    assert alias.is_symlink() and os.readlink(alias) == library.name
+    assert "LIBRARY_PATH" not in env
+    output = site / "probe.so"
+    # Distutils applies LDFLAGS to the host link. Exercise actual -l resolution,
+    # a required external symbol, fresh-process loading, and the relative RUNPATH.
+    command = [shutil.which("gcc"), "-shared", "-fPIC", "-x", "c", "-"]
+    command += shlex.split(fixed["LDFLAGS"]) + ["-lnvtx3interop", "-o", str(output)]
+    subprocess.run(
+        command,
+        input="#include <nvtx3/nvToolsExt.h>\n"
+        'int probe(void) { return nvtxRangePushA("probe"); }\n',
+        env=fixed,
+        text=True,
+        check=True,
+    )
+    moved = tmp_path / "relocated-site"
+    site.rename(moved)
+    load_env = os.environ.copy()
+    load_env.pop("LD_LIBRARY_PATH", None)
+    subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import ctypes,sys; assert ctypes.CDLL(sys.argv[1]).probe() == 13",
+            str(moved / "probe.so"),
+        ],
+        env=load_env,
+        check=True,
+    )
+
+
+def test_deep_ep_refuses_conflicting_linker_alias(tmp_path, module):
+    site, _, library = deep_ep_fixture(tmp_path)
+    toolkit = toolkit_fixture(tmp_path)
+    library.with_name("libnvtx3interop.so").write_text("unrelated library")
+    with pytest.raises(RuntimeError, match="Conflicting NVTX"):
+        module.deep_ep_build_environment(dict(os.environ, CUDA_HOME=str(toolkit)), site)
+
+
+@pytest.mark.parametrize("missing", ["cuda_profiler_api.h", "nvtx3/nvToolsExt.h", "library"])
+def test_deep_ep_missing_development_artifacts_fail_early(tmp_path, module, missing):
+    site, include, library = deep_ep_fixture(tmp_path)
+    toolkit = toolkit_fixture(tmp_path)
+    (library if missing == "library" else include / missing).unlink()
+    with pytest.raises(RuntimeError, match="Missing locked|development header missing"):
+        module.deep_ep_build_environment(dict(os.environ, CUDA_HOME=str(toolkit)), site)
+
+
+def test_deep_ep_probe_compiler_failure_prevents_load(tmp_path, module, monkeypatch):
+    calls = []
+
+    def fail(command, path, **kwargs):
+        calls.append(command)
+        source = next(Path(p) for p in command if str(p).endswith("probe.cu"))
+        assert "cuda_profiler_api.h" in source.read_text()
+        assert "-lcuda" in command and "-lnvtx3interop" in command
+        raise RuntimeError("profiler compile failed")
+
+    monkeypatch.setattr(module, "run_logged", fail)
+    with pytest.raises(RuntimeError, match="profiler compile failed"):
+        module.check_deep_ep_toolchain(
+            sys.executable, {"CUDA_HOME": "/cuda", "CC": "/usr/bin/gcc"}, tmp_path
+        )
+    assert len(calls) == 1

@@ -1,0 +1,1 @@
+Command: /mnt/hdd/nhatminh/SpecDecode/dflash/.venv-test/bin/python -c 'import ctypes, sys; ctypes.CDLL(sys.argv[1])' /mnt/hdd/nhatminh/SpecDecode/dflash/validation/deep_ep_real_probe_logs/deep-ep-probe-asa6wz54/probe.so

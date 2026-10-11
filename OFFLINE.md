@@ -144,6 +144,39 @@ fi
 
 ### Source build CUDA 13 và log lỗi Ninja
 
+Lỗi DeepEP `allocator.cuh: fatal error: cuda_profiler_api.h: No such file or
+directory` cần thêm **development headers**, không phải đổi commit DeepEP.
+Installer bổ sung `nvidia-cuda-profiler-api==13.0.85` theo SHA256 trong
+`requirements-build-cuda13.txt` ngay trước bước DeepEP, áp dụng cả full setup
+và `--retry-source deep-ep`. Đây là gói chỉ chứa headers; các pin runtime và
+upstream lock giữ nguyên. ZIP sửa lỗi mang sẵn wheel 21 KB trong
+`offline_packages/toolchain_wheels/`, được cài bằng `--no-index --require-hashes`.
+Nếu không có wheel local, installer dùng pip index đã cấu hình.
+
+HybridEP ở commit đã pin còn link `-lnvtx3interop`. Wheel NVTX đã có trong lock
+chỉ chứa `libnvtx3interop.so.1`: installer tạo symlink tương đối `.so`, bổ sung
+library search path và RUNPATH riêng cho build DeepEP. Không sửa CUDA toolkit
+hay tắt profiler/HybridEP. Trước build lớn, probe NVCC 13.0 compile và link một
+shared object SM100 có tham chiếu profiler/NVTX, rồi thử nạp bằng process mới;
+không chạy kernel hay gọi profiler trên GPU.
+
+Chuyển `b200_transfer/dflash_b200_deep_ep_fix.zip` sang folder `library/` trên
+B200 rồi chạy:
+
+```bash
+cd /workspace/storage-shared/nlp/minhpn19/dflash
+unzip -oq library/dflash_b200_deep_ep_fix.zip
+export CUDA_HOME="${CUDA_HOME:-/usr/local/cuda}"
+export PATH="$CUDA_HOME/bin:$PATH"
+python3 scripts/install_local_packages.py --backend mcore --retry-source deep-ep \
+  && bash scripts/setup_environment.sh --local-packages \
+  && source offline_packages/activate.sh
+```
+
+Kiểm chứng trên máy chuẩn bị: `validation/deep_ep_real_probe.json` và
+`validation/deep_ep_toolchain_tests.xml`. Probe compile/link thành công không
+thay thế việc build toàn bộ wheel DeepEP và kiểm tra runtime B200.
+
 `ninja: build stopped: subcommand failed` là lỗi tổng kết. Các dòng
 `ptxas info` ngay trước nó có thể thuộc một compilation khác đã thành công.
 Không thể kết luận nguyên nhân từ đoạn đuôi này; cần lỗi `FAILED:`,
