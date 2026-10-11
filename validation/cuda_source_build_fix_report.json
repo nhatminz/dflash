@@ -1,0 +1,251 @@
+{
+  "user_log": "fast-hadamard-transform failed under Ninja; supplied output contains only successful ptxas tail and wrapper exception",
+  "exact_B200_compiler_diagnostic_available": false,
+  "exact_B200_root_cause_confirmed": false,
+  "confirmed_installer_gaps_fixed": [
+    "CUDA 13 CCCL host C++ include path omitted relative to the pinned NeMo Dockerfile",
+    "Full source-backend diagnostics were not retained outside the uv failure summary",
+    "No early Torch/CUDA host-header and NVCC SM100 compile probes",
+    "Unbounded default Ninja/FlashMLA compiler job/thread counts"
+  ],
+  "implementation": [
+    "Retain all existing source SHAs, registry pins and per-package build-isolation policy",
+    "Use backend Python pip verbose/no-deps for local source builds, with complete timestamped logs and first-error summary",
+    "Set CUDA_HOME/PATH to matching CUDA 13.0 toolkit and CPLUS_INCLUDE_PATH to existing toolkit CCCL, or locked backend wheel CCCL fallback",
+    "Default build resource limits to MAX_JOBS=2 / NVCC_THREADS=1, preserve explicit values",
+    "Add scoped --retry-source / --backend mode; success does not create activation or claim full setup completion"
+  ],
+  "primary_reference": "https://github.com/MarkXCloud/RL/blob/c18e462adf34739951b3d21773f436eaee324b31/docker/Dockerfile#L176-L180",
+  "targeted_test_results": {
+    "tests": "23",
+    "errors": "0",
+    "failures": "0",
+    "skipped": "0"
+  },
+  "real_compile_probes": {
+    "CCCL": "Actual locked NVIDIA CCCL headers: missing include path fails, configured path passes g++ C++20 syntax test",
+    "NVCC": "Actual CUDA 13.0.88, GCC host compiler, -std=c++20 -arch=sm_100 compile: exit 0; no GPU kernel executed",
+    "full_B200_stack_qualified": false
+  },
+  "source_audit": {
+    "nemo-lens": {
+      "commit": "b85578fc2b736a1804705e537001b5f45e9c715d",
+      "url": "https://github.com/NVIDIA-NeMo/Lens.git",
+      "locked_metadata_version": "0.2.0+b85578f",
+      "inspected_build_files": [
+        {
+          "file": "pyproject.toml",
+          "url": "https://raw.githubusercontent.com/NVIDIA-NeMo/Lens/b85578fc2b736a1804705e537001b5f45e9c715d/pyproject.toml",
+          "sha256": "5d54d86614277793a39b0401a14625fe5152045fa7de28667f50be81622adb16"
+        }
+      ]
+    },
+    "transferqueue": {
+      "commit": "c51614308b68c8d7a87c9b3ef62d59e14c69bde2",
+      "url": "https://github.com/Ascend/TransferQueue.git",
+      "locked_metadata_version": "0.1.9",
+      "inspected_build_files": [
+        {
+          "file": "pyproject.toml",
+          "url": "https://raw.githubusercontent.com/Ascend/TransferQueue/c51614308b68c8d7a87c9b3ef62d59e14c69bde2/pyproject.toml",
+          "sha256": "0590f1fe55be970e03221b616b3494d6f4177456060a0bf4c3e370708b168474"
+        }
+      ]
+    },
+    "causal-conv1d": {
+      "commit": "4f6ae4e26ae5fe8af9372f8d312ab25cc4595223",
+      "url": "https://github.com/Dao-AILab/causal-conv1d",
+      "locked_metadata_version": "1.5.4",
+      "inspected_build_files": [
+        {
+          "file": "setup.py",
+          "url": "https://raw.githubusercontent.com/Dao-AILab/causal-conv1d/4f6ae4e26ae5fe8af9372f8d312ab25cc4595223/setup.py",
+          "sha256": "0447ac5c9769f8ef8e94a6d57d8c65d81c2786a3ef72f2c107d07814d62328b3"
+        },
+        {
+          "file": "pyproject.toml",
+          "url": "https://raw.githubusercontent.com/Dao-AILab/causal-conv1d/4f6ae4e26ae5fe8af9372f8d312ab25cc4595223/pyproject.toml",
+          "sha256": "19c9dcb1ac0433c0ffc09da6c62cdcb604c25db8caa488c9978dbd71f4d3f077"
+        }
+      ]
+    },
+    "deep-ep": {
+      "commit": "17cfb817bccec3a9c247013360cc550c2bac441e",
+      "url": "https://github.com/deepseek-ai/DeepEP.git",
+      "locked_metadata_version": "1.2.1+17cfb81",
+      "inspected_build_files": [
+        {
+          "file": "setup.py",
+          "url": "https://raw.githubusercontent.com/deepseek-ai/DeepEP/17cfb817bccec3a9c247013360cc550c2bac441e/setup.py",
+          "sha256": "ed408b88feaebf73bbe00f8da8de8713367d6073fbf9dae25d560784a7464bcf"
+        }
+      ]
+    },
+    "emerging-optimizers": {
+      "commit": "b309e2f01cda75dc96a6dc1a2355a7b3b64b5e16",
+      "url": "https://github.com/NVIDIA-NeMo/Emerging-Optimizers.git",
+      "locked_metadata_version": "0.3.0",
+      "inspected_build_files": [
+        {
+          "file": "pyproject.toml",
+          "url": "https://raw.githubusercontent.com/NVIDIA-NeMo/Emerging-Optimizers/b309e2f01cda75dc96a6dc1a2355a7b3b64b5e16/pyproject.toml",
+          "sha256": "b1e7aca3d11a04f52fa13254647106e4b4a5b4563783aadc5ea3aacf8826b824"
+        }
+      ]
+    },
+    "fast-hadamard-transform": {
+      "commit": "f134af63deb2df17e1171a9ec1ea4a7d8604d5ca",
+      "url": "https://github.com/Dao-AILab/fast-hadamard-transform.git",
+      "locked_metadata_version": "1.1.0",
+      "inspected_build_files": [
+        {
+          "file": "setup.py",
+          "url": "https://raw.githubusercontent.com/Dao-AILab/fast-hadamard-transform/f134af63deb2df17e1171a9ec1ea4a7d8604d5ca/setup.py",
+          "sha256": "75908ba0e3aa6eb35fe6b5e4135504ecc596188723c1fdf728ced2278a404160"
+        },
+        {
+          "file": "csrc/fast_hadamard_transform.cpp",
+          "url": "https://raw.githubusercontent.com/Dao-AILab/fast-hadamard-transform/f134af63deb2df17e1171a9ec1ea4a7d8604d5ca/csrc/fast_hadamard_transform.cpp",
+          "sha256": "a47004196ec460ce661722ce0b8f60761518e8a55302971e18950d7774ea0271"
+        },
+        {
+          "file": "csrc/fast_hadamard_transform_cuda.cu",
+          "url": "https://raw.githubusercontent.com/Dao-AILab/fast-hadamard-transform/f134af63deb2df17e1171a9ec1ea4a7d8604d5ca/csrc/fast_hadamard_transform_cuda.cu",
+          "sha256": "aed649e84fe379d1adfdb061fc6f622f55612ddcd103f51f08ee984ff4dff34f"
+        },
+        {
+          "file": "csrc/fast_hadamard_transform.h",
+          "url": "https://raw.githubusercontent.com/Dao-AILab/fast-hadamard-transform/f134af63deb2df17e1171a9ec1ea4a7d8604d5ca/csrc/fast_hadamard_transform.h",
+          "sha256": "993532e1792db5b38c6cbdec640d5fc52b9508b3ca46aa669b8ca7c0b541de8f"
+        },
+        {
+          "file": "fast_hadamard_transform/__init__.py",
+          "url": "https://raw.githubusercontent.com/Dao-AILab/fast-hadamard-transform/f134af63deb2df17e1171a9ec1ea4a7d8604d5ca/fast_hadamard_transform/__init__.py",
+          "sha256": "75fc4e1f8b3795517648fa5ce564d83f806749e348f7a77933e6ccbe0519dccc"
+        }
+      ]
+    },
+    "flash-mla": {
+      "commit": "b7643bd54521f563b839b98289b5cd048c062ba2",
+      "url": "https://github.com/deepseek-ai/FlashMLA",
+      "locked_metadata_version": "1.0.0+b7643bd",
+      "inspected_build_files": [
+        {
+          "file": "setup.py",
+          "url": "https://raw.githubusercontent.com/deepseek-ai/FlashMLA/b7643bd54521f563b839b98289b5cd048c062ba2/setup.py",
+          "sha256": "b5e3e587e910a9899cd456850c2e1d3a9d3482b6abfe553afb1ae73d25ab71fb"
+        }
+      ]
+    },
+    "mamba-ssm": {
+      "commit": "a14b1dff0454a3bc27d9eb31355dc01e4b2490ec",
+      "url": "https://github.com/state-spaces/mamba.git",
+      "locked_metadata_version": "2.2.6.post3",
+      "inspected_build_files": [
+        {
+          "file": "setup.py",
+          "url": "https://raw.githubusercontent.com/state-spaces/mamba/a14b1dff0454a3bc27d9eb31355dc01e4b2490ec/setup.py",
+          "sha256": "d073517f802a23c3b7a271735d2a76f5ffb023a3ac0959be36d50162b29fc41f"
+        },
+        {
+          "file": "pyproject.toml",
+          "url": "https://raw.githubusercontent.com/state-spaces/mamba/a14b1dff0454a3bc27d9eb31355dc01e4b2490ec/pyproject.toml",
+          "sha256": "5f6daa2784d7584cf1102573adb48e13c9cfb7b065f572dc8eb6c4bc2c349ed8"
+        }
+      ]
+    },
+    "nvidia-modelopt": {
+      "commit": "c3b913b9cc1d82d5a0af9fa77b4db87829e6f158",
+      "url": "https://github.com/NVIDIA/Model-Optimizer",
+      "locked_metadata_version": "0.46.0.dev86+gc3b913b9c",
+      "inspected_build_files": [
+        {
+          "file": "pyproject.toml",
+          "url": "https://raw.githubusercontent.com/NVIDIA/Model-Optimizer/c3b913b9cc1d82d5a0af9fa77b4db87829e6f158/pyproject.toml",
+          "sha256": "7ef5b7b58ff7aa937e9fa6d5ca5838495b9002df54c0759ec91d1e81776e1f5c"
+        }
+      ]
+    },
+    "nvidia-resiliency-ext": {
+      "commit": "6c5f2a13c7688d92a7ac7ee6e464721eb8b7345d",
+      "url": "https://github.com/NVIDIA/nvidia-resiliency-ext.git",
+      "locked_metadata_version": "0.6.0",
+      "inspected_build_files": [
+        {
+          "file": "pyproject.toml",
+          "url": "https://raw.githubusercontent.com/NVIDIA/nvidia-resiliency-ext/6c5f2a13c7688d92a7ac7ee6e464721eb8b7345d/pyproject.toml",
+          "sha256": "292af75dda47f225a364ee9901b0e9f31f8531f859bd3fdeb20462de7e30a604"
+        },
+        {
+          "file": "build.py",
+          "url": "https://raw.githubusercontent.com/NVIDIA/nvidia-resiliency-ext/6c5f2a13c7688d92a7ac7ee6e464721eb8b7345d/build.py",
+          "sha256": "104bb5cdfa551cf296d296f4a99a31b1c16a2a852a4d87e250176173fcfdb894"
+        }
+      ]
+    },
+    "torch-memory-saver": {
+      "commit": "9bc9a442e6d108c7b7903def199896a005143aaf",
+      "url": "https://github.com/fzyzcjy/torch_memory_saver.git",
+      "locked_metadata_version": "0.0.10b1",
+      "inspected_build_files": [
+        {
+          "file": "setup.py",
+          "url": "https://raw.githubusercontent.com/fzyzcjy/torch_memory_saver/9bc9a442e6d108c7b7903def199896a005143aaf/setup.py",
+          "sha256": "fdc1de14900bd640b22da3cd0fb49f0247f2cfab6a62794405a6755d128931d2"
+        }
+      ]
+    },
+    "transformer-engine": {
+      "commit": "42b840051647eef89761a16dfdff87e82bb253ab",
+      "url": "https://github.com/NVIDIA/TransformerEngine.git",
+      "locked_metadata_version": "2.15.0+42b8400",
+      "inspected_build_files": [
+        {
+          "file": "setup.py",
+          "url": "https://raw.githubusercontent.com/NVIDIA/TransformerEngine/42b840051647eef89761a16dfdff87e82bb253ab/setup.py",
+          "sha256": "630ad91538293026b3ee0125e3582de7dd0577af4581758e2757d72300048c90"
+        },
+        {
+          "file": "pyproject.toml",
+          "url": "https://raw.githubusercontent.com/NVIDIA/TransformerEngine/42b840051647eef89761a16dfdff87e82bb253ab/pyproject.toml",
+          "sha256": "a63c04c1cbc8210dd175db2b60f1103e0da645e427938ef8675762ee67116c63"
+        },
+        {
+          "file": "build_tools/build_ext.py",
+          "url": "https://raw.githubusercontent.com/NVIDIA/TransformerEngine/42b840051647eef89761a16dfdff87e82bb253ab/build_tools/build_ext.py",
+          "sha256": "aa3d4929e75bd06dd936ce6cc839c970ad2a3da56e9fdb5d87407e51fc6d22a1"
+        },
+        {
+          "file": "build_tools/utils.py",
+          "url": "https://raw.githubusercontent.com/NVIDIA/TransformerEngine/42b840051647eef89761a16dfdff87e82bb253ab/build_tools/utils.py",
+          "sha256": "433646d3ef7a90bdd269b8e37d10558b66c2470a175db93533deea7b75c1c567"
+        }
+      ]
+    },
+    "deep-gemm": {
+      "commit": "67fc64863d43521080bf2005e6528d0fceee9510",
+      "url": "https://github.com/deepseek-ai/DeepGEMM.git",
+      "locked_metadata_version": "2.5.0",
+      "inspected_build_files": [
+        {
+          "file": "setup.py",
+          "url": "https://raw.githubusercontent.com/deepseek-ai/DeepGEMM/67fc64863d43521080bf2005e6528d0fceee9510/setup.py",
+          "sha256": "89a2f832f78aa11c93ed0d40d49191de196fb29155fc5ef1572a8bc849695570"
+        }
+      ]
+    }
+  },
+  "upstream_metadata_mismatch_observed": {
+    "package": "fast-hadamard-transform",
+    "source___version__": "1.0.4.post1",
+    "lock_version": "1.1.0",
+    "action": "Keep exact pinned Git commit; do not silently substitute a PyPI wheel"
+  },
+  "versions_lock_sha256": "316e522bf4578a5856bd0cab8d5a158aa9a2579359b2339fa30333baad783b4d",
+  "nemo_uv_lock_sha256": "95f63521d28a2a4104ff372c5985fe63826ab27d6901b78bada1ab1a89a81bf7",
+  "limits": [
+    "Full FHT / MCore / vLLM installation and GPU execution on B200 remain unverified; no B200 execution access on this host",
+    "Causal-conv1d/Mamba hardcode four NVCC threads; setting NVCC_THREADS does not override their setup.py",
+    "FHT setup hardcodes SM80/90/100; TORCH_CUDA_ARCH_LIST alone does not restrict those architectures"
+  ]
+}

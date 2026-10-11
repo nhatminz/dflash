@@ -1,0 +1,37 @@
+{
+  "cuda_version": "nvcc: NVIDIA (R) Cuda compiler driver\nCopyright (c) 2005-2025 NVIDIA Corporation\nBuilt on Wed_Aug_20_01:58:59_PM_PDT_2025\nCuda compilation tools, release 13.0, V13.0.88\nBuild cuda_13.0.r13.0/compiler.36424714_0\n",
+  "command": [
+    "/home/hmi/dflash-cuda13-probe-27b4f0s5/nvidia/cu13/bin/nvcc",
+    "-std=c++20",
+    "-arch=sm_100",
+    "-ccbin",
+    "/usr/bin/gcc",
+    "-c",
+    "/home/hmi/dflash-cuda13-probe-27b4f0s5/probe.cu",
+    "-o",
+    "/home/hmi/dflash-cuda13-probe-27b4f0s5/probe.o"
+  ],
+  "exit_code": 0,
+  "stderr": "",
+  "object_bytes": 12464,
+  "artifacts": [
+    {
+      "name": "nvidia-cuda-nvcc",
+      "url": "https://files.pythonhosted.org/packages/71/8b/a546c12881fffeba927d810598987df25d74b8b241788c7db8dfc93b0173/nvidia_cuda_nvcc-13.0.88-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl",
+      "sha256": "56fe502eb77625a12f25172caa3cdddb4e4c8ba2c8c17dba44b164761b380f03"
+    },
+    {
+      "name": "nvidia-nvvm",
+      "url": "https://files.pythonhosted.org/packages/15/b0/ee41e6d1108d959b5097163e7190c2d0f7857dea75606ce358f0275891b4/nvidia_nvvm-13.0.88-py3-none-manylinux2010_x86_64.manylinux_2_12_x86_64.whl",
+      "sha256": "c5f41ffeb6466944a026dfa5317d7d85355c119bbec279205d22f1869d1054e0"
+    },
+    {
+      "name": "nvidia-cuda-crt",
+      "url": "https://files.pythonhosted.org/packages/05/69/a1ec4d9f0747d85964206feb47bf359f48a2d6af74c0add8abba6efe3dda/nvidia_cuda_crt-13.0.88-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl",
+      "sha256": "2c8043c7c9e02492716426e9919fc78d2c5b3b2a7a768a88e952676b08aa55a4"
+    }
+  ],
+  "gpu_kernel_executed": false,
+  "B200_runtime_verified": false,
+  "temporary_toolchain_removed_after_probe": true
+}

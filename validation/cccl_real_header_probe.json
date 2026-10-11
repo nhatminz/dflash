@@ -1,0 +1,23 @@
+{
+  "artifacts": [
+    {
+      "name": "nvidia-cuda-cccl",
+      "version": "13.3.3.4.1",
+      "url": "https://files.pythonhosted.org/packages/f8/ab/049726d90147865a3ea53bae6cb7c35b98bf1fdf96cdb967101329625f83/nvidia_cuda_cccl-13.3.3.4.1-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl",
+      "sha256": "sha256:cc0adc188d570b09f4d606c7dc05a42aa3d8aa082e0d60f7bbfc5b6435f627c6"
+    },
+    {
+      "name": "nvidia-cuda-runtime",
+      "version": "13.0.96",
+      "url": "https://files.pythonhosted.org/packages/2e/24/d1558f3b68b1d26e706813b1d10aa1d785e4698c425af8db8edc3dced472/nvidia_cuda_runtime-13.0.96-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl",
+      "sha256": "sha256:7f82250d7782aa23b6cfe765ecc7db554bd3c2870c43f3d1821f1d18aebf0548"
+    }
+  ],
+  "before_exit_code": 1,
+  "before_diagnostic": "<stdin>:1:10: fatal error: cuda/std/type_traits: No such file or directory\ncompilation terminated.\n",
+  "after_exit_code": 0,
+  "compiler": "/usr/bin/g++",
+  "header_test_only": true,
+  "nvcc_version_probe_stubbed": true,
+  "complete_B200_build_verified": false
+}

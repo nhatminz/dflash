@@ -14,7 +14,15 @@ import subprocess
 import sys
 import tarfile
 import tomllib
+from datetime import datetime, timezone
 from pathlib import Path
+
+from local_build import (
+    check_cuda_toolchain,
+    cuda_build_environment,
+    pip_build_environment,
+    run_logged,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -226,6 +234,15 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--skip-runtime-check", action="store_true")
     parser.add_argument("--check-only", action="store_true")
+    parser.add_argument(
+        "--retry-source", help="Rebuild only this staged source in an existing backend"
+    )
+    parser.add_argument(
+        "--backend",
+        choices=("base", "mcore", "vllm"),
+        default="mcore",
+        help="Backend used by --retry-source (default: mcore)",
+    )
     args = parser.parse_args()
     if sys.version_info < (3, 12):
         raise RuntimeError(
@@ -276,12 +293,24 @@ def main():
         NVTE_FRAMEWORK="pytorch",
     )
     interpreters = {}
+    log_root = destination / "build_logs" / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
     upstream = tomllib.loads((ROOT / "third_party/nemo-rl/pyproject.toml").read_text())
     no_isolation = {
         name.lower().replace("_", "-")
         for name in upstream["tool"]["uv"]["no-build-isolation-package"]
     }
     for backend, items in plan["requirements"].items():
+        if args.retry_source and backend != args.backend:
+            continue
+        source_lines = sorted(items["sources"], key=source_order)
+        if args.retry_source:
+            source_lines = [
+                line
+                for line in source_lines
+                if line.rstrip("/").rsplit("/", 1)[-1] == args.retry_source
+            ]
+            if not source_lines:
+                raise RuntimeError(f"No staged source {args.retry_source!r} in backend {backend}")
         path = ROOT / (".venv-local" if backend == "base" else f".venv-local-{backend}")
         executable = path / "bin/python"
         if executable.exists():
@@ -294,22 +323,25 @@ def main():
                 check=True,
             )
         else:
+            if args.retry_source:
+                raise RuntimeError(f"Retry requires an existing {path}; run full setup first")
             subprocess.run(["uv", "venv", str(path), "--python", str(python)], env=env, check=True)
         build_env = dict(env, VIRTUAL_ENV=str(path), PATH=f"{path}/bin:{env['PATH']}")
         command = ["uv", "pip", "install", "--python", str(executable), "--no-deps"]
         # Build tooling can come from the configured PyPI/internal index.
-        subprocess.run(
-            command + ["wheel>=0.46.2", "cmake>=3.21"], cwd=ROOT, env=build_env, check=True
-        )
-        bootstrap = destination / f"{backend}.bootstrap.txt"
-        bootstrap.write_text("\n".join(bootstrap_lines(items["registry"])) + "\n")
-        subprocess.run(command + ["-r", str(bootstrap)], cwd=ROOT, env=build_env, check=True)
-        subprocess.run(
-            command + ["-r", str(destination / f"{backend}.registry.txt")],
-            cwd=ROOT,
-            env=build_env,
-            check=True,
-        )
+        if not args.retry_source:
+            subprocess.run(
+                command + ["wheel>=0.46.2", "cmake>=3.21"], cwd=ROOT, env=build_env, check=True
+            )
+            bootstrap = destination / f"{backend}.bootstrap.txt"
+            bootstrap.write_text("\n".join(bootstrap_lines(items["registry"])) + "\n")
+            subprocess.run(command + ["-r", str(bootstrap)], cwd=ROOT, env=build_env, check=True)
+            subprocess.run(
+                command + ["-r", str(destination / f"{backend}.registry.txt")],
+                cwd=ROOT,
+                env=build_env,
+                check=True,
+            )
         site_packages = Path(
             subprocess.check_output(
                 [str(executable), "-c", "import sysconfig; print(sysconfig.get_path('purelib'))"],
@@ -320,39 +352,36 @@ def main():
         if cudnn.is_dir():
             build_env.setdefault("CUDNN_PATH", str(cudnn))
             build_env.setdefault("CUDNN_HOME", str(cudnn))
-        for line in sorted(items["sources"], key=source_order):
+        logs = log_root / backend
+        if backend in {"mcore", "vllm"}:
+            build_env = cuda_build_environment(build_env, site_packages)
+            check_cuda_toolchain(executable, build_env, logs)
+        for line in source_lines:
+            name = line.rstrip("/").rsplit("/", 1)[-1]
             options, source_env = source_build_options(line, plan, build_env, no_isolation)
-            if line.rstrip("/").rsplit("/", 1)[-1] == "nvidia-resiliency-ext":
+            if name == "nvidia-resiliency-ext":
                 source_env = resiliency_cupti_environment(executable, source_env)
-            if line.rstrip("/").rsplit("/", 1)[-1] == "Megatron-Bridge":
+            # pip streams the complete backend output with --verbose. uv's
+            # failure summary can truncate the first compiler error behind
+            # thousands of successful ptxas messages from another Ninja job.
+            source_command = [str(executable), "-m", "pip", "install", "--verbose", "--no-deps"]
+            if name == "Megatron-Bridge":
                 # The pinned NeMo root requires 3.13 while its Bridge gitlink
                 # still declares <3.13. Keep the pin and make this one metadata
                 # exception explicit; the final MCore import check remains required.
                 print(
                     "Pinned Megatron-Bridge declares Python <3.13; overriding only this metadata bound."
                 )
-                subprocess.run(
-                    [
-                        str(executable),
-                        "-m",
-                        "pip",
-                        "install",
-                        "--no-deps",
-                        "--no-build-isolation",
-                        "--ignore-requires-python",
-                    ]
-                    + shlex.split(line),
-                    cwd=ROOT,
-                    env=source_env,
-                    check=True,
-                )
-                continue
-            subprocess.run(
-                command + options,
+                options = ["--no-build-isolation", "--ignore-requires-python"] + shlex.split(line)
+            run_logged(
+                source_command + options,
+                logs / f"{name}.log",
                 cwd=ROOT,
-                env=source_env,
-                check=True,
+                env=pip_build_environment(source_env),
             )
+        if args.retry_source:
+            print(f"Source retry succeeded; full setup still required. Logs: {logs}")
+            return
         subprocess.run(
             command + ["--no-build-isolation", "-e", "./third_party/nemo-rl"],
             cwd=ROOT,

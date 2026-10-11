@@ -142,6 +142,48 @@ else
 fi
 ```
 
+### Source build CUDA 13 và log lỗi Ninja
+
+`ninja: build stopped: subcommand failed` là lỗi tổng kết. Các dòng
+`ptxas info` ngay trước nó có thể thuộc một compilation khác đã thành công.
+Không thể kết luận nguyên nhân từ đoạn đuôi này; cần lỗi `FAILED:`,
+`fatal error:`, `error:` hoặc `Killed` ở đầu output.
+
+Installer hiện chạy các source qua `python -m pip install --verbose --no-deps`,
+giữ chính sách build isolation của upstream và ghi toàn bộ stdout/stderr vào
+`offline_packages/build_logs/<timestamp>/<backend>/<package>.log`. Nếu thất
+bại, nó in lại diagnostic đầu tiên cùng lệnh compiler, thay vì chỉ đoạn đuôi
+dài của `ptxas`. Package registry vẫn được cài bằng uv từ các requirement đã
+export frozen. Index pip được giữ nguyên hoặc lấy từ cấu hình index uv.
+
+Cấu hình build đã bổ sung đường dẫn `CUDA_HOME/include/cccl` vào
+`CPLUS_INCLUDE_PATH`, theo Dockerfile NeMo đã pin. Nếu toolkit thiếu CCCL,
+installer thử headers từ wheel `nvidia-cuda-cccl` đã được lock và cài trong
+chính backend; nó không tải một phiên bản thay thế. Trước khi build source
+MCore/vLLM, installer kiểm tra NVCC 13.0, compile thử các Torch/CUDA headers
+bằng C++20 và compile một CUDA object SM100. Đây là kiểm tra toolchain;
+không thay thế bước kiểm tra runtime B200 cuối setup.
+
+Mặc định giới hạn build `MAX_JOBS=2`, `NVCC_THREADS=1`,
+`NVTE_BUILD_MAX_JOBS=2`, `NVTE_BUILD_THREADS_PER_JOB=1`; giá trị bạn đặt được
+giữ nguyên. Những biến này không thay đổi batch size hay thuật toán training.
+Một số setup.py tự hardcode số thread/architecture riêng; chẳng hạn bản
+Hadamard đã pin vẫn build SM80/90/100 dù `TORCH_CUDA_ARCH_LIST=10.0`.
+
+Gói `dflash_b200_source_build_fix.zip` chứa installer, helper và các bản sửa
+CUPTI/compiler trước đó. Giải nén vào project rồi chạy full setup như trên.
+Để chỉ thử lại package đang lỗi trong môi trường MCore đã có sẵn:
+
+```bash
+python3 scripts/install_local_packages.py \
+  --backend mcore --retry-source fast-hadamard-transform
+```
+
+Lệnh retry không cài lại các backend và không tạo activation/đánh dấu setup
+hoàn tất. Sau khi thành công, vẫn chạy full setup và kiểm tra runtime. Bản
+source Hadamard ở commit `f134af63...` tự khai version `1.0.4.post1`, dù
+upstream lock ghi `1.1.0`; installer tiếp tục giữ đúng commit này.
+
 ```bash
 cd /workspace/storage-shared/nlp/minhpn19/dflash
 export CUDA_HOME="${CUDA_HOME:-/usr/local/cuda}"
