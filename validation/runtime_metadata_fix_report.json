@@ -1,0 +1,27 @@
+{
+  "problem": "Pinned FlashAttention wheel filename carries a CUDA/Torch local version but its embedded METADATA reports 2.8.1; direct string comparison falsely rejects the installed binary.",
+  "changes": [
+    "Validate the exact locked wheel SHA256 and all installed payload hashes using its RECORD; retain strict metadata and CUDA extension identity checks.",
+    "Support exact URL/SHA256 provenance for direct uv installs without the local wheel.",
+    "--finalize-only reapplies the idempotent vLLM patch and qualifies existing environments without pip, uv installs, NVCC, or source builds.",
+    "Collect runtime failures across all three actors with actual versions; save offline_packages/runtime_validation.json even on runtime failure.",
+    "Keep existing strict Torch, Triton, Transformers, Ray, TE, Python, CUDA, BF16 and Reflex checks; recheck DeepGEMM import in the vLLM actor."
+  ],
+  "tests": {
+    "passed": 57,
+    "failed": 0,
+    "command": ".venv-test/bin/python -m pytest tests/test_environment_validation.py tests/test_local_install.py tests/test_local_build.py -q",
+    "junit": "validation/runtime_metadata_fix_tests.xml"
+  },
+  "checks": {
+    "ruff": "passed",
+    "format": "passed",
+    "git_diff_check": "passed"
+  },
+  "real_artifact_probe": "validation/flash_attn_metadata_real_probe.json",
+  "versions_lock_sha256": "316e522bf4578a5856bd0cab8d5a158aa9a2579359b2339fa30333baad783b4d",
+  "versions_lock_changed": false,
+  "limitations": [
+    "No full B200/Python3.13 FlashAttention GPU kernel or full runtime qualification was run on the RTX3090 transfer host. The finalizer requires real actor imports and CUDA13/BF16 checks on B200."
+  ]
+}

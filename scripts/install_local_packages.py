@@ -295,11 +295,55 @@ except (m.PackageNotFoundError, StopIteration):
     return result
 
 
+def finalize_installation(destination, interpreters, env, *, skip_runtime_check=False):
+    """Finish patch/activation/qualification without reinstalling any package."""
+    subprocess.run(
+        [interpreters["vllm"], str(ROOT / "scripts/patch_upstream.py"), "--vllm-installed"],
+        env=env,
+        check=True,
+    )
+    env.update(
+        PYTHON_BIN=interpreters["base"],
+        DFLASH_MCORE_PYTHON=interpreters["mcore"],
+        DFLASH_VLLM_PYTHON=interpreters["vllm"],
+        PYTHONPATH=f"{ROOT}:{ROOT}/third_party/nemo-rl"
+        + (":" + env["PYTHONPATH"] if env.get("PYTHONPATH") else ""),
+    )
+    # Compute paths when sourced so this activation file relocates with project.
+    activation = """_dflash_local_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export PYTHON_BIN="$_dflash_local_root/.venv-local/bin/python"
+export DFLASH_MCORE_PYTHON="$_dflash_local_root/.venv-local-mcore/bin/python"
+export DFLASH_VLLM_PYTHON="$_dflash_local_root/.venv-local-vllm/bin/python"
+export UV_PYTHON_DOWNLOADS=never
+export PYTHONPATH="$_dflash_local_root:$_dflash_local_root/third_party/nemo-rl${PYTHONPATH:+:$PYTHONPATH}"
+unset _dflash_local_root
+"""
+    (destination / "activate.sh").write_text(activation)
+    if not skip_runtime_check:
+        subprocess.run(
+            [
+                interpreters["base"],
+                str(ROOT / "scripts/validate_environment.py"),
+                "--require-runtime",
+                "--output",
+                str(destination / "runtime_validation.json"),
+            ],
+            env=env,
+            check=True,
+        )
+    print("Use these environments: source offline_packages/activate.sh")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--skip-runtime-check", action="store_true")
-    parser.add_argument("--check-only", action="store_true")
     recovery = parser.add_mutually_exclusive_group()
+    recovery.add_argument("--check-only", action="store_true")
+    recovery.add_argument(
+        "--finalize-only",
+        action="store_true",
+        help="Only patch, activate and validate existing environments; no installs or builds",
+    )
     recovery.add_argument(
         "--retry-source", help="Rebuild only this staged source in an existing backend"
     )
@@ -319,6 +363,18 @@ def main():
             "Run this staging installer with Python >=3.12 (tar extraction filter required)"
         )
     destination = ROOT / "offline_packages"
+    if args.finalize_only:
+        interpreters = {}
+        for backend in ("base", "mcore", "vllm"):
+            path = ROOT / (".venv-local" if backend == "base" else f".venv-local-{backend}")
+            executable = path / "bin/python"
+            if not executable.is_file():
+                raise RuntimeError(f"Finalization requires the installed environment: {path}")
+            interpreters[backend] = str(executable)
+        finalize_installation(
+            destination, interpreters, os.environ.copy(), skip_runtime_check=args.skip_runtime_check
+        )
+        return
     plan = json.loads((destination / "manifest.json").read_text())
     schedule = installation_schedule(
         plan,
@@ -499,39 +555,9 @@ def main():
             command + ["-r", str(ROOT / "requirements.txt")], cwd=ROOT, env=build_env, check=True
         )
         interpreters[backend] = str(executable)
-    subprocess.run(
-        [interpreters["vllm"], str(ROOT / "scripts/patch_upstream.py"), "--vllm-installed"],
-        env=env,
-        check=True,
+    finalize_installation(
+        destination, interpreters, env, skip_runtime_check=args.skip_runtime_check
     )
-    env.update(
-        PYTHON_BIN=interpreters["base"],
-        DFLASH_MCORE_PYTHON=interpreters["mcore"],
-        DFLASH_VLLM_PYTHON=interpreters["vllm"],
-        PYTHONPATH=f"{ROOT}:{ROOT}/third_party/nemo-rl"
-        + (":" + env["PYTHONPATH"] if env.get("PYTHONPATH") else ""),
-    )
-    # Compute paths when sourced so this activation file relocates with project.
-    activation = """_dflash_local_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-export PYTHON_BIN="$_dflash_local_root/.venv-local/bin/python"
-export DFLASH_MCORE_PYTHON="$_dflash_local_root/.venv-local-mcore/bin/python"
-export DFLASH_VLLM_PYTHON="$_dflash_local_root/.venv-local-vllm/bin/python"
-export UV_PYTHON_DOWNLOADS=never
-export PYTHONPATH="$_dflash_local_root:$_dflash_local_root/third_party/nemo-rl${PYTHONPATH:+:$PYTHONPATH}"
-unset _dflash_local_root
-"""
-    (destination / "activate.sh").write_text(activation)
-    if not args.skip_runtime_check:
-        subprocess.run(
-            [
-                interpreters["base"],
-                str(ROOT / "scripts/validate_environment.py"),
-                "--require-runtime",
-            ],
-            env=env,
-            check=True,
-        )
-    print("Use these environments: source offline_packages/activate.sh")
 
 
 if __name__ == "__main__":

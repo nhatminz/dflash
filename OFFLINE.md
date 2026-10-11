@@ -144,6 +144,35 @@ fi
 
 ### Source build CUDA 13 và log lỗi Ninja
 
+Nếu DeepGEMM đã cài/import thành công nhưng xác nhận cuối báo
+`mcore: flash_attn differs from the NeMo lock`, đây là lỗi đối chiếu tên wheel
+với metadata: wheel đã pin tên `2.8.1+cu13torch2.10cxx11abiTRUE`, nhưng
+`METADATA` bên trong ghi `2.8.1`. Validator mới kiểm tra SHA256 wheel từ
+`uv.lock` và 84 file đã cài theo RECORD, gồm extension CUDA; không chấp nhận
+một gói PyPI/CUDA 12 khác chỉ vì có cùng số `2.8.1`. Với cài trực tiếp bằng
+`uv sync`, yêu cầu provenance URL và SHA256 đúng lock.
+
+Khi các gói đã cài xong, chỉ cần ZIP nhỏ chứa code, không chuyển lại wheel:
+
+```bash
+cd /workspace/storage-shared/nlp/minhpn19/dflash
+unzip -oq library/dflash_b200_runtime_metadata_fix.zip
+python3 scripts/install_local_packages.py --finalize-only \
+  && source offline_packages/activate.sh
+```
+
+`--finalize-only` chỉ áp dụng patch vLLM idempotent, ghi activation và kiểm
+tra ba môi trường đã có. Không gọi pip/uv install, NVCC hoặc source build.
+Validator vẫn yêu cầu đúng pin runtime, CUDA 13/BF16, import MCore/TE/DFlash,
+DeepGEMM và vLLM/Reflex. Nếu một backend lỗi, nó kiểm tra tiếp các backend
+còn lại và ghi đầy đủ lỗi cùng phiên bản thực vào
+`offline_packages/runtime_validation.json`; tiến trình vẫn trả lỗi.
+Không chạy lại full setup hoặc resume DeepGEMM sau lệnh này.
+
+Kiểm chứng wheel thật: `validation/flash_attn_metadata_real_probe.json`.
+Probe trên máy chuyển file chỉ kiểm tra danh tính binary; import và kernel
+GPU B200 chưa được chạy trên máy đó.
+
 Lỗi DeepGEMM `/usr/bin/ld: cannot find -lnvrtc` là lỗi link sau khi C++ đã
 compile xong. Setup.py ở commit đã pin link `cudart` và `nvrtc` nhưng chỉ thêm
 `${CUDA_HOME}/lib64`; wheel CUDA 13 của backend đặt thư viện ở

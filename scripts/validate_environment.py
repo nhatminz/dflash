@@ -29,11 +29,21 @@ from nemo_rl.algorithms.loss.loss_functions import BlockDraftLossFn
 result.update(flash_attn=m.version("flash-attn"), transformer_engine=m.version("transformer-engine"),
               megatron=True, dflash_model=True)
 """
+        code += f"""import sys
+sys.path.insert(0, {str(ROOT / "scripts")!r})
+from runtime_artifacts import qualify_flash_attn
+try:
+    result['flash_attn_artifact'] = qualify_flash_attn(
+        {str(ROOT)!r}, json.loads(open({str(ROOT / "versions.lock")!r}).read())['runtime']['flash-attn'])
+except Exception as error:
+    result['flash_attn_artifact_error'] = str(error)
+"""
     if backend == "vllm":
-        code += """import vllm
+        code += """import vllm, deep_gemm
 from vllm.v1.spec_decode.dflash import DFlashProposer
 from pathlib import Path
 result.update(vllm=m.version("vllm"), dflash_proposer=True,
+    deep_gemm=deep_gemm.__version__,
     reflex_patch="reflex.acceptance_buffer" in (Path(vllm.__file__).parent/"v1/sample/rejection_sampler.py").read_text())
 """
     code += "\nprint(json.dumps(result))"
@@ -41,6 +51,41 @@ result.update(vllm=m.version("vllm"), dflash_proposer=True,
     if process.returncode:
         raise RuntimeError(f"{backend} environment failed: {python}\n{process.stderr[-6000:]}")
     return json.loads(process.stdout.strip().splitlines()[-1])
+
+
+def runtime_errors(state, backend, lock):
+    errors = []
+    for package in ("torch", "triton", "transformers", "ray"):
+        if state[package] != lock["runtime"][package]:
+            errors.append(
+                f"{backend}: {package}={state[package]}, expected {lock['runtime'][package]}"
+            )
+    if (
+        not state["python"].startswith("3.13.")
+        or tuple(map(int, state["python"].split("."))) < (3, 13, 14)
+        or state["cuda"] != "13.0"
+        or not state.get("bf16")
+    ):
+        errors.append(f"{backend}: incompatible Python/CUDA/BF16: {state}")
+    if backend == "vllm" and (state["vllm"] != lock["vllm_version"] or not state["reflex_patch"]):
+        errors.append(
+            f"vllm: version={state['vllm']}, expected {lock['vllm_version']}; "
+            f"Reflex patch={state['reflex_patch']}"
+        )
+    if backend == "mcore":
+        artifact = state.get("flash_attn_artifact", {})
+        if artifact.get("locked_version", "").lower() != lock["runtime"]["flash-attn"].lower():
+            errors.append(
+                f"mcore: flash_attn metadata={state['flash_attn']}, "
+                f"expected artifact={lock['runtime']['flash-attn']}: "
+                + state.get("flash_attn_artifact_error", "missing locked artifact verification")
+            )
+        expected = lock["runtime"]["transformer-engine"]
+        if state["transformer_engine"].lower() != expected.lower():
+            errors.append(
+                f"mcore: transformer_engine={state['transformer_engine']}, expected {expected}"
+            )
+    return errors
 
 
 def main():
@@ -82,6 +127,7 @@ def main():
             report["draft_contract"] = "valid"
     if args.data and not Path(args.data).is_file():
         raise FileNotFoundError(args.data)
+    errors = []
     if args.require_runtime:
         environments = dict(
             base=sys.executable,
@@ -90,35 +136,22 @@ def main():
         )
         report["environments"] = {}
         for backend, python in environments.items():
-            state = inspect_python(python, backend)
-            for package in ("torch", "triton", "transformers", "ray"):
-                if state[package] != lock["runtime"][package]:
-                    raise RuntimeError(
-                        f"{backend}: {package}={state[package]}, expected {lock['runtime'][package]}"
-                    )
-            if (
-                not state["python"].startswith("3.13.")
-                or tuple(map(int, state["python"].split("."))) < (3, 13, 14)
-                or state["cuda"] != "13.0"
-                or not state.get("bf16")
-            ):
-                raise RuntimeError(f"incompatible Python/CUDA/BF16: {state}")
-            if backend == "vllm" and (
-                state["vllm"] != lock["vllm_version"] or not state["reflex_patch"]
-            ):
-                raise RuntimeError("vLLM version or Reflex patch mismatch")
-            if backend == "mcore":
-                for package, key in (
-                    ("flash_attn", "flash-attn"),
-                    ("transformer_engine", "transformer-engine"),
-                ):
-                    if state[package].lower() != lock["runtime"][key].lower():
-                        raise RuntimeError(f"mcore: {package} differs from the NeMo lock")
-            report["environments"][backend] = state
+            print(f"Checking {backend}: {python}", file=sys.stderr, flush=True)
+            try:
+                state = inspect_python(python, backend)
+                report["environments"][backend] = state
+                errors.extend(runtime_errors(state, backend, lock))
+            except (RuntimeError, OSError) as error:
+                report["environments"][backend] = {"error": str(error)}
+                errors.append(str(error))
+        report["runtime_valid"] = not errors
+        report["runtime_errors"] = errors
     result = json.dumps(report, indent=2)
     print(result)
     if args.output:
         Path(args.output).write_text(result + "\n")
+    if errors:
+        raise RuntimeError("Runtime validation failed:\n" + "\n".join(errors))
 
 
 if __name__ == "__main__":

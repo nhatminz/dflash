@@ -1,0 +1,13 @@
+{
+  "sha256": "a14fea157eb61dfee56f605a24a7a6150704517759125b3942dd04bffa05d6cf",
+  "bytes": 124568721,
+  "url": "https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.1/flash_attn-2.8.1+cu13torch2.10cxx11abiTRUE-cp313-cp313-linux_x86_64.whl",
+  "metadata_version": "2.8.1",
+  "locked_version": "2.8.1+cu13torch2.10cxx11abitrue",
+  "wheel": "flash_attn-2.8.1+cu13torch2.10cxx11abiTRUE-cp313-cp313-linux_x86_64.whl",
+  "verification": "locked-wheel-record",
+  "files_verified": 84,
+  "old_string_comparison": false,
+  "modified_extension_rejected": "Installed FlashAttention differs from the locked wheel: flash_attn_2_cuda.cpython-313-x86_64-linux-gnu.so",
+  "limitation": "No FlashAttention import or GPU kernel on CPython 3.13/B200 was run on this transfer host."
+}
