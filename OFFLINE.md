@@ -53,6 +53,33 @@ Không dùng quy tắc `.gitignore` khi copy dependency; không bỏ các thư m
 `.git` nằm trong `third_party/` và `offline_packages/sources/`. `git clone`
 project chính không mang các artifact bị ignore này sang.
 
+Có sẵn ba file ZIP trên máy 3090 (đường dẫn lưu cụ thể được ghi trong
+`validation/b200_transfer_report.json`):
+
+* `dflash_b200_sources.zip`: source dependency, metadata `.git`, submodule,
+  Python standalone và manifest/requirements;
+* `dflash_b200_wheels.zip`: 6 wheel ngoài PyPI;
+* `dflash_b200_torch.zip`: wheel Torch, lưu riêng trên SSD vì ổ dự án thiếu chỗ.
+
+Chuyển cả ba ZIP và `SHA256SUMS` sang cùng một thư mục trên B200. Code project lấy từ GitHub như
+bình thường, rồi giải nén **từ thư mục gốc `dflash`**:
+
+```bash
+cd /đường/dẫn/chứa/ba/zip
+sha256sum -c SHA256SUMS
+cd /workspace/storage-shared/nlp/minhpn19/dflash
+unzip -oq /đường/dẫn/chứa/ba/zip/dflash_b200_sources.zip
+unzip -oq /đường/dẫn/chứa/ba/zip/dflash_b200_wheels.zip
+unzip -oq /đường/dẫn/chứa/ba/zip/dflash_b200_torch.zip
+python3 scripts/install_local_packages.py --check-only
+bash scripts/setup_environment.sh --local-packages
+source offline_packages/activate.sh
+```
+
+ZIP giữ symlink và quyền Unix; dùng `unzip` trên Linux. Không cần chuyển
+virtualenv của máy 3090, cache test hoặc `outputs/`. Bộ ZIP không chứa model
+weights và dataset; giữ các đường dẫn dữ liệu/model local đã có trên B200.
+
 Ví dụ đóng gói dependency để chuyển qua shared storage/file transfer:
 
 ```bash
@@ -77,6 +104,24 @@ Chế độ `--local-packages` chỉ dùng file local cho wheel ngoài PyPI và 
 source. Các package PyPI còn lại được lấy từ index đang truy cập được. Installer
 đọc `PIP_INDEX_URL`/`PIP_EXTRA_INDEX_URL` nếu bạn chưa cấu hình index riêng cho
 uv. Nó không tự đổi sang một phiên bản thư viện khác khi thiếu dependency.
+
+Nếu log dừng ở `nvidia-resiliency-ext` với `required files libcupti.so and
+cupti.h not found`, lỗi xảy ra trong setup, trước khi có `activate.sh`. Bản
+installer mới lấy CUPTI từ `nvidia-cuda-cupti==13.0.85` đã cài trong môi trường
+MCore: wheel có `nvidia/cu13/include/cupti.h` và `lib/libcupti.so.13`, nhưng
+thiếu tên linker `libcupti.so` mà upstream tìm. Installer tạo symlink tên này,
+trỏ `CUDA_PATH` riêng cho build Resiliency, bổ sung headers từ development
+toolkit qua `CPPFLAGS` và RUNPATH cho thư viện. Không tắt CUPTI, không đổi pin
+và không đổi `CUDA_HOME` của các extension khác.
+
+Cập nhật `scripts/install_local_packages.py` (hoặc giải nén gói nhỏ
+`dflash_b200_cupti_fix.zip` từ máy 3090) rồi chạy lại setup. Các environment
+và package đã cài được tái sử dụng; không cần xóa chúng hay tải lại ba ZIP lớn.
+Chỉ source activation sau khi setup thành công:
+
+```bash
+bash scripts/setup_environment.sh --local-packages && source offline_packages/activate.sh
+```
 
 ```bash
 cd /workspace/storage-shared/nlp/minhpn19/dflash

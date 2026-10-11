@@ -1,0 +1,9 @@
+{
+  "package": "nvidia-cuda-cupti",
+  "version": "13.0.85",
+  "hash_verified": true,
+  "paths": [
+    "nvidia/cu13/include/cupti.h",
+    "nvidia/cu13/lib/libcupti.so.13"
+  ]
+}

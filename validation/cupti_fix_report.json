@@ -1,0 +1,28 @@
+{
+  "problem": "setup failed building nvidia-resiliency-ext: missing cupti.h/libcupti.so; activate.sh was never generated",
+  "fix": "Discover pinned CUPTI inside the target actor environment; add the unversioned linker alias, toolkit CPPFLAGS and library RUNPATH only for the Resiliency build",
+  "installer_tests": {
+    "passed": 9,
+    "skipped": 0,
+    "junit": "validation/cupti_install_tests.xml"
+  },
+  "ruff": "passed",
+  "bash_syntax": "passed",
+  "real_link_probe": {
+    "packages_used_for_cpu_probe": {
+      "nvidia-cuda-cupti": "13.0.85",
+      "nvidia-cuda-runtime": "13.0.96",
+      "nvidia-cuda-crt": "13.3.73"
+    },
+    "locked_hashes_verified": true,
+    "compiled_against_real_headers": true,
+    "toolkit_headers_supplied_separately": true,
+    "linked_versioned_cupti": true,
+    "load_without_ld_library_path": true,
+    "cupti_get_version": "130001",
+    "b200_full_install_executed": false
+  },
+  "production_b200_install_executed": false,
+  "versions_lock_modified": false,
+  "nemo_uv_lock_modified": false
+}

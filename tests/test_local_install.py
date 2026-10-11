@@ -2,6 +2,9 @@
 
 import importlib.util
 import json
+import os
+import shlex
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -162,3 +165,108 @@ def test_shallow_sources_keep_locked_versions_and_upstream_build_isolation(monke
     )
     assert options[0] == "--no-build-isolation"
     assert env == {"PATH": "/fixture"}
+
+
+def cupti_fixture(tmp_path):
+    site = tmp_path / "site"
+    cuda = site / "nvidia/cu13"
+    (cuda / "include").mkdir(parents=True)
+    (cuda / "lib").mkdir()
+    (cuda / "include/cupti.h").write_text("#include <fixture_extra.h>\nint cupti_fixture(void);\n")
+    toolkit = tmp_path / "toolkit"
+    (toolkit / "include/crt").mkdir(parents=True)
+    (toolkit / "include/crt/host_defines.h").write_text("/* CUDA CRT fixture */\n")
+    (toolkit / "include/fixture_extra.h").write_text("/* CUDA development header fixture */\n")
+    metadata = site / "nvidia_cuda_cupti-13.0.85.dist-info"
+    metadata.mkdir()
+    (metadata / "METADATA").write_text("Name: nvidia-cuda-cupti\nVersion: 13.0.85\n")
+    (metadata / "RECORD").write_text(
+        "nvidia/cu13/include/cupti.h,,\nnvidia/cu13/lib/libcupti.so.13,,\n"
+    )
+    env = dict(os.environ, PYTHONPATH=str(site), CUDA_PATH="/missing/cuda", CUDA_HOME=str(toolkit))
+    env.pop("STRAGGLER_DET_SKIP_CUPTI_EXT_BUILD", None)
+    env.pop("LD_LIBRARY_PATH", None)
+    env.pop("LDFLAGS", None)
+    env.pop("CPPFLAGS", None)
+    return cuda, env
+
+
+def test_cupti_pip_layout_builds_and_loads_with_versioned_library(tmp_path, monkeypatch):
+    module = load_script("install_local_packages", monkeypatch)
+    compiler = shutil.which("cc")
+    assert compiler, "A C compiler is required to test the CUPTI link/load regression"
+    cuda, env = cupti_fixture(tmp_path)
+    subprocess.run(
+        [
+            compiler,
+            "-x",
+            "c",
+            "-shared",
+            "-fPIC",
+            "-Wl,-soname,libcupti.so.13",
+            "-o",
+            str(cuda / "lib/libcupti.so.13"),
+            "-",
+        ],
+        input="int cupti_fixture(void) { return 13; }",
+        text=True,
+        check=True,
+    )
+    result = module.resiliency_cupti_environment(sys.executable, env)
+    assert result["CUDA_PATH"] == str(cuda)
+    assert result["CUDA_HOME"] == str(tmp_path / "toolkit")
+    assert env["CUDA_PATH"] == "/missing/cuda"
+    alias = cuda / "lib/libcupti.so"
+    assert alias.is_symlink() and alias.readlink() == Path("libcupti.so.13")
+    # Match upstream's os.walk search (which does not follow directory symlinks).
+    assert any("cupti.h" in files for _, _, files in os.walk(result["CUDA_PATH"]))
+    assert any("libcupti.so" in files for _, _, files in os.walk(result["CUDA_PATH"]))
+    library = tmp_path / "probe.so"
+    subprocess.run(
+        [
+            compiler,
+            "-x",
+            "c",
+            "-shared",
+            "-fPIC",
+            "-o",
+            str(library),
+            "-",
+            "-I" + str(cuda / "include"),
+            "-L" + str(cuda / "lib"),
+            "-lcupti",
+        ]
+        + shlex.split(result["CPPFLAGS"])
+        + shlex.split(result["LDFLAGS"]),
+        input='#include "cupti.h"\nint probe(void) { return cupti_fixture(); }',
+        text=True,
+        check=True,
+    )
+    subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import ctypes,sys; assert ctypes.CDLL(sys.argv[1]).probe() == 13",
+            str(library),
+        ],
+        env=env,
+        check=True,
+    )
+    # A rerun reuses the valid alias and leaves caller flags intact.
+    env["LDFLAGS"] = "-Wl,--as-needed"
+    assert module.resiliency_cupti_environment(sys.executable, env)["LDFLAGS"].startswith(
+        "-Wl,--as-needed "
+    )
+
+
+def test_cupti_missing_files_fail_with_actionable_error(tmp_path, monkeypatch):
+    module = load_script("install_local_packages", monkeypatch)
+    _, env = cupti_fixture(tmp_path)
+    with pytest.raises(RuntimeError, match="Restore nvidia-cuda-cupti"):
+        module.resiliency_cupti_environment(sys.executable, env)
+
+
+def test_cupti_explicit_upstream_skip_is_preserved(monkeypatch):
+    module = load_script("install_local_packages", monkeypatch)
+    env = {"STRAGGLER_DET_SKIP_CUPTI_EXT_BUILD": "true"}
+    assert module.resiliency_cupti_environment("/not/an/interpreter", env) == env

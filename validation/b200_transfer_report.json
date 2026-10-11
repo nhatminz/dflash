@@ -1,0 +1,64 @@
+{
+  "archives": [
+    {
+      "path": "/mnt/hdd/nhatminh/SpecDecode/dflash/b200_transfer/dflash_b200_sources.zip",
+      "name": "dflash_b200_sources.zip",
+      "bytes": 874515699,
+      "sha256": "9c05310a8ffc1436fcf6b1f36a18a5b624a289272f019e296d87b5d986201927",
+      "entries": 58356,
+      "verified_wheels": []
+    },
+    {
+      "path": "/mnt/hdd/nhatminh/SpecDecode/dflash/b200_transfer/dflash_b200_wheels.zip",
+      "name": "dflash_b200_wheels.zip",
+      "bytes": 4142660101,
+      "sha256": "3dfaa408c7592cadc5bcdb201d134c70bd0faca742619a621cf98201a8375f7c",
+      "entries": 6,
+      "verified_wheels": [
+        "offline_packages/wheels/torchvision-0.26.0+cu130-cp313-cp313-manylinux_2_28_x86_64.whl",
+        "offline_packages/wheels/triton-3.6.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+        "offline_packages/wheels/flash_attn-2.8.1+cu13torch2.10cxx11abiTRUE-cp313-cp313-linux_x86_64.whl",
+        "offline_packages/wheels/flashinfer_jit_cache-0.6.8.post1+cu130-cp39-abi3-manylinux_2_28_x86_64.whl",
+        "offline_packages/wheels/flashinfer_jit_cache-0.6.13+cu130-cp39-abi3-manylinux_2_28_x86_64.whl",
+        "offline_packages/wheels/vllm-0.25.1-cp38-abi3-manylinux_2_28_x86_64.whl"
+      ]
+    },
+    {
+      "path": "/home/hmi/dflash_b200_transfer/dflash_b200_torch.zip",
+      "name": "dflash_b200_torch.zip",
+      "bytes": 526164217,
+      "sha256": "a903622760edeb9c7de9b4ad0fef94fb7fe85624f4ba4bc551b2d325d5352f3e",
+      "entries": 1,
+      "verified_wheels": [
+        "offline_packages/wheels/torch-2.11.0+cu130-cp313-cp313-manylinux_2_28_x86_64.whl"
+      ]
+    }
+  ],
+  "total_bytes": 5543340017,
+  "external_wheels_verified_against_lock": 7,
+  "pinned_git_sources": 13,
+  "unix_symlinks_preserved": 85,
+  "source_zip_crc": "passed",
+  "torch_zip_crc": "passed",
+  "wheel_zip_crc_and_sha256": "passed",
+  "archive_paths_safe": true,
+  "metadata_git_preserved": true,
+  "excluded": [
+    "project code (get through GitHub)",
+    "3090 virtual environments",
+    "test caches",
+    "outputs",
+    "model weights",
+    "datasets"
+  ],
+  "restores": [
+    "offline_packages/",
+    "third_party/"
+  ],
+  "checksum_file": "/mnt/hdd/nhatminh/SpecDecode/dflash/b200_transfer/SHA256SUMS",
+  "instructions": "/mnt/hdd/nhatminh/SpecDecode/dflash/b200_transfer/README_B200.txt",
+  "python_archive_sha256": "passed",
+  "source_manifest_and_requirements": "passed",
+  "nemo_uv_lock_hash": "passed",
+  "git_dependency_heads_in_archive": "passed"
+}

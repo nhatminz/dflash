@@ -1,0 +1,14 @@
+{
+  "packages_used_for_cpu_probe": {
+    "nvidia-cuda-cupti": "13.0.85",
+    "nvidia-cuda-runtime": "13.0.96",
+    "nvidia-cuda-crt": "13.3.73"
+  },
+  "locked_hashes_verified": true,
+  "compiled_against_real_headers": true,
+  "toolkit_headers_supplied_separately": true,
+  "linked_versioned_cupti": true,
+  "load_without_ld_library_path": true,
+  "cupti_get_version": "130001",
+  "b200_full_install_executed": false
+}

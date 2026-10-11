@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 import shlex
+import shutil
 import subprocess
 import sys
 import tarfile
@@ -123,6 +124,67 @@ def source_build_options(line, plan, env, no_isolation):
     return flags + shlex.split(line), source_env
 
 
+def resiliency_cupti_environment(python, env):
+    """Expose the target environment's pinned CUPTI to NRX's isolated build.
+
+    NRX searches CUDA_PATH recursively for cupti.h and exactly libcupti.so.
+    NVIDIA's CUDA-13 pip wheel ships libcupti.so.13 without that linker alias.
+    Keep this override scoped to NRX; other packages still use CUDA_HOME/nvcc.
+    """
+    result = env.copy()
+    if env.get("STRAGGLER_DET_SKIP_CUPTI_EXT_BUILD", "0").lower() in {"1", "on", "yes", "true"}:
+        return result
+    probe = """import importlib.metadata as m, json
+from pathlib import Path
+try:
+    dist = m.distribution("nvidia-cuda-cupti")
+    files = [Path(dist.locate_file(f)).absolute() for f in (dist.files or [])]
+    header = next(p for p in files if p.name == "cupti.h" and p.is_file())
+    names = ("libcupti.so", "libcupti.so." + dist.version.split(".")[0])
+    library = next(p for name in names for p in files if p.name == name and p.is_file())
+    print(json.dumps(dict(header=str(header), library=str(library))))
+except (m.PackageNotFoundError, StopIteration):
+    raise SystemExit("The target environment's nvidia-cuda-cupti lacks its header or shared library")
+"""
+    process = subprocess.run([str(python), "-c", probe], env=env, capture_output=True, text=True)
+    if process.returncode:
+        raise RuntimeError(
+            f"Cannot prepare CUPTI for nvidia-resiliency-ext using {python}:\n"
+            f"{process.stderr.strip()}\n"
+            "Restore nvidia-cuda-cupti from this backend's locked registry requirements, "
+            "then rerun setup. activate.sh is created only after package installation succeeds."
+        )
+    paths = json.loads(process.stdout.strip().splitlines()[-1])
+    header, library = Path(paths["header"]), Path(paths["library"])
+    alias = library.parent / "libcupti.so"
+    if not alias.exists():
+        if alias.is_symlink():
+            raise RuntimeError(f"Broken existing CUPTI linker alias: {alias}")
+        alias.symlink_to(library.name)
+    elif alias.resolve() != library.resolve():
+        raise RuntimeError(f"Existing CUPTI linker alias differs from the pinned library: {alias}")
+    root = Path(os.path.commonpath((header.parent, library.parent)))
+    result["CUDA_PATH"] = str(root)
+    # CUPTI headers include CUDA driver/runtime headers; pip's runtime wheel
+    # does not include every CRT header supplied by the development toolkit.
+    nvcc = shutil.which("nvcc", path=env.get("PATH"))
+    candidates = [env.get("CUDA_HOME"), env.get("CUDA_PATH")]
+    if nvcc:
+        candidates.append(str(Path(nvcc).resolve().parent.parent))
+    candidates.append("/usr/local/cuda")
+    for candidate in candidates:
+        if candidate and (Path(candidate) / "include/crt/host_defines.h").is_file():
+            include = shlex.quote(f"-I{Path(candidate) / 'include'}")
+            result["CPPFLAGS"] = (result.get("CPPFLAGS", "") + " " + include).strip()
+            break
+    # NRX's Extension omits runtime_library_dirs. Retain the actual CUPTI
+    # directory in its ELF RUNPATH so importing it works in a fresh terminal.
+    rpath = shlex.quote(f"-Wl,-rpath,{library.parent}")
+    result["LDFLAGS"] = (result.get("LDFLAGS", "") + " " + rpath).strip()
+    print(f"nvidia-resiliency-ext CUPTI: {root}", flush=True)
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--skip-runtime-check", action="store_true")
@@ -221,6 +283,8 @@ def main():
             build_env.setdefault("CUDNN_HOME", str(cudnn))
         for line in sorted(items["sources"], key=source_order):
             options, source_env = source_build_options(line, plan, build_env, no_isolation)
+            if line.rstrip("/").rsplit("/", 1)[-1] == "nvidia-resiliency-ext":
+                source_env = resiliency_cupti_environment(executable, source_env)
             if line.rstrip("/").rsplit("/", 1)[-1] == "Megatron-Bridge":
                 # The pinned NeMo root requires 3.13 while its Bridge gitlink
                 # still declares <3.13. Keep the pin and make this one metadata
@@ -298,6 +362,6 @@ unset _dflash_local_root
 if __name__ == "__main__":
     try:
         main()
-    except (RuntimeError, FileNotFoundError) as error:
+    except (RuntimeError, FileNotFoundError, subprocess.CalledProcessError) as error:
         print(f"Local setup failed: {error}", file=sys.stderr)
         raise SystemExit(2) from None
