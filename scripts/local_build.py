@@ -45,8 +45,6 @@ def cuda_build_environment(env, site_packages):
     candidates = [home / "include/cccl", Path(site_packages) / "nvidia/cu13/include/cccl"]
     for cccl in candidates:
         if (cccl / "cuda/std/type_traits").is_file() and (cccl / "nv/target").is_file():
-            existing = [p for p in env.get("CPLUS_INCLUDE_PATH", "").split(os.pathsep) if p]
-            result["CPLUS_INCLUDE_PATH"] = os.pathsep.join(dict.fromkeys([str(cccl), *existing]))
             break
     else:
         raise RuntimeError(
@@ -54,6 +52,37 @@ def cuda_build_environment(env, site_packages):
             f"Checked: {', '.join(map(str, candidates))}. "
             "Restore the development toolkit's include/cccl or the locked nvidia-cuda-cccl wheel."
         )
+    # Torch's CUDAContextLight.h also includes cuSPARSE/cuBLAS/cuSOLVER.
+    # CUDA 13 wheels merge these headers under nvidia/cu13/include; cuDNN
+    # and older wheel layouts use separate nvidia/<component>/include roots.
+    # Expose existing backend-local headers to BOTH the host compiler and
+    # NVCC's device frontend. CPLUS_INCLUDE_PATH alone only covers the host.
+    components = (
+        "cu13",
+        "cublas",
+        "cusparse",
+        "cusolver",
+        "cudnn",
+        "cusparselt",
+        "cuda_runtime",
+        "cuda_nvrtc",
+        "cuda_cccl",
+        "curand",
+        "cufft",
+        "nvtx",
+        "nccl",
+    )
+    wheel_includes = [Path(site_packages) / "nvidia" / name / "include" for name in components]
+    includes = [home / "include", cccl] + [p for p in wheel_includes if p.is_dir()]
+    for variable in ("CPATH", "CPLUS_INCLUDE_PATH"):
+        previous = [p for p in env.get(variable, "").split(os.pathsep) if p]
+        result[variable] = os.pathsep.join(dict.fromkeys([*map(str, includes), *previous]))
+    # Keep the development toolkit headers first: pip can contain a newer
+    # CRT than the installed NVCC. Never replace CUDA_HOME with a wheel root.
+    flags = ["-I" + str(p) for p in includes]
+    own_flags = set(flags)
+    flags += [f for f in shlex.split(env.get("NVCC_PREPEND_FLAGS", "")) if f not in own_flags]
+    result["NVCC_PREPEND_FLAGS"] = shlex.join(flags)
     # These are build resource limits, independent of training batch sizes.
     for key, default in (
         ("MAX_JOBS", "2"),
@@ -64,6 +93,7 @@ def cuda_build_environment(env, site_packages):
     ):
         result.setdefault(key, default)
     print(f"CUDA source build: {nvcc}; CCCL={cccl}; MAX_JOBS={result['MAX_JOBS']}", flush=True)
+    print("CUDA header roots: " + os.pathsep.join(map(str, includes)), flush=True)
     return result
 
 
@@ -143,7 +173,11 @@ def check_cuda_toolchain(python, env, log_dir):
             cwd=temporary,
         )
         device = temporary / "probe.cu"
-        device.write_text("__global__ void probe(float* x) { x[threadIdx.x] = 0.0f; }\n")
+        device.write_text(
+            "#include <cuda_fp16.h>\n#include <cusparse.h>\n"
+            "#include <cublas_v2.h>\n#include <cusolverDn.h>\n"
+            "__global__ void probe(float* x) { x[threadIdx.x] = 0.0f; }\n"
+        )
         # CUDA's -ccbin expects an executable, not shell flags or a launcher.
         # For custom CC commands NVCC keeps its own host compiler selection.
         cc = shlex.split(env["CC"])

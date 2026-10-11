@@ -1,0 +1,61 @@
+{
+  "header_artifacts": [
+    {
+      "name": "nvidia-cublas",
+      "version": "13.5.1.27",
+      "url": "https://files.pythonhosted.org/packages/ce/0d/cc77458e8fb0634597e3994650c2853ee785f2fc61bf370bbb304021cca1/nvidia_cublas-13.5.1.27-py3-none-manylinux_2_27_x86_64.whl",
+      "sha256": "sha256:db3a1f0c8bc24945a4d195ba199d83f27e650ffdfc0c32e6b8362c314f14d553",
+      "header_files": 11
+    },
+    {
+      "name": "nvidia-cuda-cccl",
+      "version": "13.3.3.4.1",
+      "url": "https://files.pythonhosted.org/packages/f8/ab/049726d90147865a3ea53bae6cb7c35b98bf1fdf96cdb967101329625f83/nvidia_cuda_cccl-13.3.3.4.1-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl",
+      "sha256": "sha256:cc0adc188d570b09f4d606c7dc05a42aa3d8aa082e0d60f7bbfc5b6435f627c6",
+      "header_files": 2000
+    },
+    {
+      "name": "nvidia-cuda-crt",
+      "version": "13.3.73",
+      "url": "https://files.pythonhosted.org/packages/7e/ce/16d76f4b5b3f7460f5ebd17516685495c149c66651ffdd381f90e4d4e65c/nvidia_cuda_crt-13.3.73-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl",
+      "sha256": "sha256:df14a17ae1c5c3171265411212246654d780f89344ea85344466c6b955247543",
+      "header_files": 30
+    },
+    {
+      "name": "nvidia-cuda-runtime",
+      "version": "13.0.96",
+      "url": "https://files.pythonhosted.org/packages/2e/24/d1558f3b68b1d26e706813b1d10aa1d785e4698c425af8db8edc3dced472/nvidia_cuda_runtime-13.0.96-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl",
+      "sha256": "sha256:7f82250d7782aa23b6cfe765ecc7db554bd3c2870c43f3d1821f1d18aebf0548",
+      "header_files": 96
+    },
+    {
+      "name": "nvidia-cusolver",
+      "version": "12.0.4.66",
+      "url": "https://files.pythonhosted.org/packages/5f/67/cba3777620cdacb99102da4042883709c41c709f4b6323c10781a9c3aa34/nvidia_cusolver-12.0.4.66-py3-none-manylinux_2_27_x86_64.whl",
+      "sha256": "sha256:0a759da5dea5c0ea10fd307de75cdeb59e7ea4fcb8add0924859b944babf1112",
+      "header_files": 11
+    },
+    {
+      "name": "nvidia-cusparse",
+      "version": "12.6.3.3",
+      "url": "https://files.pythonhosted.org/packages/fa/18/623c77619c31d62efd55302939756966f3ecc8d724a14dab2b75f1508850/nvidia_cusparse-12.6.3.3-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl",
+      "sha256": "sha256:2b3c89c88d01ee0e477cb7f82ef60a11a4bcd57b6b87c33f789350b59759360b",
+      "header_files": 7
+    }
+  ],
+  "torch_headers": "2.11.0+cu130 CP313 production wheel",
+  "host_python_headers": "3.12",
+  "baseline_diagnostic": "In file included from /dev/shm/dflash-math-header-probe-id9z6u3u/site/torch/include/ATen/cuda/CUDAContext.h:4,\n                 from /dev/shm/dflash-math-header-probe-id9z6u3u/torch_headers.cpp:1:\n/dev/shm/dflash-math-header-probe-id9z6u3u/site/torch/include/ATen/cuda/CUDAContextLight.h:10:10: fatal error: cusparse.h: No such file or directory\n   10 | #include <cusparse.h>\n      |          ^~~~~~~~~~~~\ncompilation terminated.\n",
+  "baseline_exit": 1,
+  "torch_host_header_probe_exit": 0,
+  "pinned_hadamard_cpp_probe_exit": 0,
+  "pinned_hadamard_commit": "f134af63deb2df17e1171a9ec1ea4a7d8604d5ca",
+  "nvcc_version": "nvcc: NVIDIA (R) Cuda compiler driver\nCopyright (c) 2005-2025 NVIDIA Corporation\nBuilt on Wed_Aug_20_01:58:59_PM_PDT_2025\nCuda compilation tools, release 13.0, V13.0.88\nBuild cuda_13.0.r13.0/compiler.36424714_0\n",
+  "nvcc_math_headers_SM100_exit": 0,
+  "nvcc_math_object_bytes": 15464,
+  "gpu_kernel_executed": false,
+  "complete_B200_install_verified": false,
+  "toolkit_removed_after_probe": true,
+  "torch_wheel_sha256_verified": "554461b76f21211927c776056bcb0b00fb42972364794b686d768ebb0b586366",
+  "hadamard_cpp_sha256": "a47004196ec460ce661722ce0b8f60761518e8a55302971e18950d7774ea0271"
+}

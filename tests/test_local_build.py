@@ -2,6 +2,7 @@
 
 import importlib
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -75,9 +76,52 @@ def test_cccl_locked_pip_layout_fallback(tmp_path, module):
     (cccl / "cuda/std/type_traits").touch()
     (cccl / "nv/target").touch()
     env = dict(os.environ, CUDA_HOME=str(toolkit))
-    assert module.cuda_build_environment(env, site)["CPLUS_INCLUDE_PATH"].split(os.pathsep)[
-        0
-    ] == str(cccl)
+    assert str(cccl) in module.cuda_build_environment(env, site)["CPLUS_INCLUDE_PATH"].split(
+        os.pathsep
+    )
+
+
+def test_torch_math_headers_from_backend_wheels_reach_host_and_nvcc(tmp_path, module):
+    compiler = shutil.which("g++") or shutil.which("c++")
+    assert compiler
+    toolkit = toolkit_fixture(tmp_path)
+    site = tmp_path / "mcore-site"
+    include = site / "nvidia/cu13/include"
+    include.mkdir(parents=True)
+    (include / "cusparse.h").write_text("#include <cublas_v2.h>\n#include <cusolverDn.h>\n")
+    (include / "cublas_v2.h").write_text("#define CUBLAS_HEADER_FIXTURE 13\n")
+    (include / "cusolverDn.h").write_text("#define CUSOLVER_HEADER_FIXTURE 13\n")
+    cudnn = site / "nvidia/cudnn/include"
+    cudnn.mkdir(parents=True)
+    (cudnn / "cudnn.h").write_text("#define CUDNN_HEADER_FIXTURE 9\n")
+    env = dict(
+        os.environ, CUDA_HOME=str(toolkit), NVCC_PREPEND_FLAGS="-Xcompiler -Wall -Xcompiler -O2"
+    )
+    env.pop("CPLUS_INCLUDE_PATH", None)
+    env.pop("CPATH", None)
+    source = (
+        "#include <cusparse.h>\n#include <cudnn.h>\n"
+        "static_assert(CUBLAS_HEADER_FIXTURE == 13 && CUSOLVER_HEADER_FIXTURE == 13 "
+        "&& CUDNN_HEADER_FIXTURE == 9);\n"
+    )
+    command = [compiler, "-x", "c++", "-std=c++20", "-fsyntax-only", "-"]
+    failed = subprocess.run(command, input=source, env=env, text=True, capture_output=True)
+    assert failed.returncode and "cusparse.h" in failed.stderr
+    result = module.cuda_build_environment(env, site)
+    subprocess.run(command, input=source, env=result, text=True, check=True)
+    flags = shlex.split(result["NVCC_PREPEND_FLAGS"])
+    assert flags[0] == "-I" + str(toolkit / "include")
+    assert "-I" + str(include) in flags and "-I" + str(cudnn) in flags
+    assert flags[-4:] == ["-Xcompiler", "-Wall", "-Xcompiler", "-O2"]
+    assert "CPATH" not in env and "CPLUS_INCLUDE_PATH" not in env
+    # A repeated call retains argument pairs and does not duplicate generated flags.
+    assert (
+        module.cuda_build_environment(result, site)["NVCC_PREPEND_FLAGS"]
+        == result["NVCC_PREPEND_FLAGS"]
+    )
+    other = tmp_path / "vllm-site"
+    isolated = module.cuda_build_environment(env, other)
+    assert str(site) not in isolated["CPATH"]
 
 
 @pytest.mark.parametrize("version, cccl, error", [("12.8", True, "13.0"), ("13.0", False, "CCCL")])

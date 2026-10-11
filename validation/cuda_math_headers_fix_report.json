@@ -1,0 +1,24 @@
+{
+  "diagnosis": "Torch CUDAContextLight.h cannot find cusparse.h: prior local builder exposed CCCL but omitted backend wheel math-library include roots",
+  "fix": "Expose existing backend-local NVIDIA header roots to CPATH/CPLUS_INCLUDE_PATH and NVCC_PREPEND_FLAGS; retain matching CUDA development toolkit headers first and preserve caller NVCC argument pairs",
+  "dependency_pins_changed": false,
+  "backend_scoped": true,
+  "test_results": {
+    "tests": "24",
+    "errors": "0",
+    "failures": "0",
+    "skipped": "0"
+  },
+  "real_artifact_validation": "validation/cuda_math_headers_real_probe.json",
+  "real_checks_passed": [
+    "Original missing cusparse.h reproduced using production Torch 2.11 headers",
+    "Full Torch CUDA/Python host header syntax check after fix",
+    "Exact pinned Hadamard C++ translation syntax check after fix",
+    "Actual NVCC 13.0.88 math-header CUDA SM100 object compile after fix"
+  ],
+  "limits": [
+    "Host Python C headers were 3.12; production wheel headers were the locked Torch 2.11 CP313 artifact",
+    "Full Hadamard wheel build, link/import and complete B200 installation not executed on this host"
+  ],
+  "versions_lock_sha256": "316e522bf4578a5856bd0cab8d5a158aa9a2579359b2339fa30333baad783b4d"
+}

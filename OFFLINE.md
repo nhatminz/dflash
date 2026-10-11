@@ -164,6 +164,22 @@ MCore/vLLM, installer kiểm tra NVCC 13.0, compile thử các Torch/CUDA header
 bằng C++20 và compile một CUDA object SM100. Đây là kiểm tra toolchain;
 không thay thế bước kiểm tra runtime B200 cuối setup.
 
+Nếu lỗi là `CUDAContextLight.h: fatal error: cusparse.h: No such file or
+directory`, headers của các math library cũng cần nằm trong đường dẫn compiler.
+Các wheel cuSPARSE/cuBLAS/cuSOLVER đã pin cho CUDA 13 chứa headers ở
+`<backend-site-packages>/nvidia/cu13/include`; cuDNN dùng
+`nvidia/cudnn/include`. Installer bổ sung các thư mục headers tồn tại của
+chính backend vào `CPATH`/`CPLUS_INCLUDE_PATH`, đồng thời truyền `-I` qua
+`NVCC_PREPEND_FLAGS` cho frontend NVCC. Headers development toolkit đứng
+trước wheel headers để CRT từ pip không ghi đè CRT phù hợp với NVCC 13.0.
+Các flags NVCC do người dùng đặt được giữ nguyên. Không copy headers vào
+`/usr/local/cuda` hay dùng headers của môi trường khác.
+
+Bản sửa này có trong `dflash_b200_cuda_headers_fix.zip`, đã gồm các bản sửa
+trước. Nó kiểm tra lại cuSPARSE/cuBLAS/cuSOLVER trong cả probe C++ và CUDA
+SM100. Sau khi giải nén, dùng lệnh retry Hadamard bên dưới rồi full setup;
+không cần xóa môi trường hoặc tải lại các ZIP dependency lớn.
+
 Mặc định giới hạn build `MAX_JOBS=2`, `NVCC_THREADS=1`,
 `NVTE_BUILD_MAX_JOBS=2`, `NVTE_BUILD_THREADS_PER_JOB=1`; giá trị bạn đặt được
 giữ nguyên. Những biến này không thay đổi batch size hay thuật toán training.
