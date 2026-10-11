@@ -351,3 +351,141 @@ def test_cupti_explicit_upstream_skip_is_preserved(monkeypatch):
     module = load_script("install_local_packages", monkeypatch)
     env = {"STRAGGLER_DET_SKIP_CUPTI_EXT_BUILD": "true"}
     assert module.resiliency_cupti_environment("/not/an/interpreter", env) == env
+
+
+def recovery_plan():
+    return {
+        "requirements": {
+            "base": {"sources": ["./sources/nemo-lens"], "registry": ["base==1"]},
+            "mcore": {
+                "sources": [
+                    "-e ./sources/Megatron-Bridge",
+                    "./sources/transformer-engine",
+                    "./sources/fast-hadamard-transform",
+                    "-e ./sources/Megatron-LM",
+                ],
+                "registry": ["mcore==1"],
+            },
+            "vllm": {
+                "sources": ["./sources/deep-ep", "./sources/deep-gemm"],
+                "registry": ["vllm==1"],
+            },
+        }
+    }
+
+
+def test_resume_schedule_retains_later_sources_and_backends(monkeypatch):
+    module = load_script("install_local_packages", monkeypatch)
+    schedule = module.installation_schedule(
+        recovery_plan(), resume_from_source="transformer-engine"
+    )
+    assert [item[0] for item in schedule] == ["mcore", "vllm"]
+    assert [Path(line.split()[-1]).name for line in schedule[0][1]] == [
+        "transformer-engine",
+        "Megatron-LM",
+        "Megatron-Bridge",
+    ]
+    assert schedule[0][2] is True and schedule[1][2] is False
+    retry = module.installation_schedule(recovery_plan(), retry_source="transformer-engine")
+    assert retry == [("mcore", ["./sources/transformer-engine"], True)]
+    full = module.installation_schedule(recovery_plan())
+    assert [item[0] for item in full] == ["base", "mcore", "vllm"]
+    assert all(not item[2] for item in full)
+
+
+def test_resume_bad_boundary_fails_before_work(monkeypatch):
+    module = load_script("install_local_packages", monkeypatch)
+    with pytest.raises(RuntimeError, match="No staged source"):
+        module.installation_schedule(
+            recovery_plan(), backend="vllm", resume_from_source="transformer-engine"
+        )
+    with pytest.raises(RuntimeError, match="Choose either"):
+        module.installation_schedule(
+            recovery_plan(), retry_source="deep-ep", resume_from_source="deep-ep"
+        )
+
+
+@pytest.mark.parametrize("complete_bundle", [False, True])
+def test_cuda_header_supplement_uses_hashes_and_local_bundle(
+    tmp_path, monkeypatch, complete_bundle
+):
+    module = load_script("install_local_packages", monkeypatch)
+    wheels = tmp_path / "toolchain_wheels"
+    wheels.mkdir()
+    (wheels / "nvidia_cuda_profiler_api-13.0.85-py3-none-any.whl").touch()
+    if complete_bundle:
+        (wheels / "nvidia_nvml_dev-13.0.87-py3-none-any.whl").touch()
+    calls = []
+    monkeypatch.setattr(module, "run_logged", lambda command, *a, **kw: calls.append((command, kw)))
+    module.install_cuda_build_headers(
+        "/backend/bin/python",
+        {"UV_INDEX_URL": "https://internal.example/simple"},
+        tmp_path,
+        tmp_path / "logs",
+    )
+    command, kwargs = calls[0]
+    assert command[:4] == ["/backend/bin/python", "-m", "pip", "install"]
+    assert "--require-hashes" in command and "--no-deps" in command
+    assert "--find-links" in command
+    assert ("--no-index" in command) == complete_bundle
+    assert kwargs["env"]["PIP_INDEX_URL"] == "https://internal.example/simple"
+
+
+def test_resume_main_does_not_repeat_earlier_installs_and_keeps_runtime_check(
+    tmp_path, monkeypatch
+):
+    module = load_script("install_local_packages", monkeypatch)
+    monkeypatch.setattr(module, "ROOT", tmp_path)
+    plan = recovery_plan()
+    destination = tmp_path / "offline_packages"
+    (destination / "runtime/python/bin").mkdir(parents=True)
+    (destination / "runtime/python/bin/python3.13").touch()
+    (destination / "manifest.json").write_text(json.dumps(plan))
+    project = tmp_path / "third_party/nemo-rl"
+    project.mkdir(parents=True)
+    (project / "pyproject.toml").write_text("[tool.uv]\nno-build-isolation-package = []\n")
+    for name in (".venv-local", ".venv-local-mcore", ".venv-local-vllm"):
+        (tmp_path / name / "bin").mkdir(parents=True)
+        (tmp_path / name / "bin/python").touch()
+    calls = []
+    monkeypatch.setattr(module, "verify", lambda plan: None)
+    monkeypatch.setattr(module, "compiler_environment", lambda env: dict(env, CC="gcc", CXX="g++"))
+    monkeypatch.setattr(module.subprocess, "run", lambda command, **kw: calls.append(list(command)))
+    monkeypatch.setattr(module.subprocess, "check_output", lambda *a, **kw: str(tmp_path / "site"))
+    monkeypatch.setattr(module, "run_logged", lambda command, *a, **kw: calls.append(list(command)))
+    monkeypatch.setattr(module, "cuda_build_environment", lambda env, site: env)
+    monkeypatch.setattr(module, "deep_ep_build_environment", lambda env, site: env)
+    monkeypatch.setattr(module, "check_cuda_toolchain", lambda *a: None)
+    monkeypatch.setattr(module, "check_deep_ep_toolchain", lambda *a: None)
+    monkeypatch.setattr(module, "check_transformer_engine_headers", lambda *a: None)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "install_local_packages.py",
+            "--backend",
+            "mcore",
+            "--resume-from-source",
+            "transformer-engine",
+        ],
+    )
+    module.main()
+    source_calls = [c for c in calls if "--verbose" in c]
+    assert [Path(c[-1]).name for c in source_calls] == [
+        "transformer-engine",
+        "Megatron-LM",
+        "Megatron-Bridge",
+        "deep-ep",
+        "deep-gemm",
+    ]
+    registry = [
+        c
+        for c in calls
+        if c[:3] == ["uv", "pip", "install"]
+        and any(p.endswith((".registry.txt", ".bootstrap.txt")) or p == "wheel>=0.46.2" for p in c)
+    ]
+    assert registry and all(".venv-local-vllm/bin/python" in c[4] for c in registry)
+    assert any("--require-runtime" in c for c in calls)
+    assert any(str(tmp_path / "scripts/patch_upstream.py") in c for c in calls)
+    activation = (destination / "activate.sh").read_text()
+    assert "DFLASH_MCORE_PYTHON" in activation and "DFLASH_VLLM_PYTHON" in activation

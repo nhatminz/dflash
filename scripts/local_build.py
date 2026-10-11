@@ -192,6 +192,32 @@ def check_deep_ep_toolchain(python, env, log_dir):
         )
 
 
+def check_transformer_engine_headers(env, source, log_dir):
+    """Compile the exact translation unit that otherwise fails late in TE's build.
+
+    Keep the source tree, CMake cache, flags and successful objects intact.
+    CPATH exposes development headers without changing Ninja's compile
+    commands for all previously compiled CUDA translation units.
+    """
+    source = Path(source)
+    translation = source / "transformer_engine/common/util/cuda_nvml.cpp"
+    if not translation.is_file():
+        raise RuntimeError(f"Pinned Transformer Engine NVML source missing: {translation}")
+    run_logged(
+        shlex.split(env["CXX"])
+        + [
+            "-std=c++17",
+            "-fsyntax-only",
+            str(translation),
+            "-I" + str(source / "transformer_engine"),
+            "-I" + str(source / "transformer_engine/common/include"),
+        ],
+        Path(log_dir) / "transformer-engine-headers.log",
+        env=env,
+        cwd=source,
+    )
+
+
 def first_build_error(log_path):
     """Extract the first failed command/diagnostic, before a long successful tail."""
     lines = log_path.read_text(errors="replace").splitlines()
@@ -257,6 +283,7 @@ def check_cuda_toolchain(python, env, log_dir):
         host = temporary / "headers.cpp"
         host.write_text(
             "#include <cuda_runtime.h>\n#include <cuda/std/type_traits>\n"
+            "#include <nvml.h>\n"
             "#include <ATen/cuda/CUDAContext.h>\n#include <torch/extension.h>\n"
         )
         run_logged(

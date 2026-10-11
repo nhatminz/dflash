@@ -1,0 +1,32 @@
+{
+  "diagnosis": "Transformer Engine CUDA core build fails late at util/cuda_nvml.cpp because nvml.h is absent; Python NVML bindings do not supply the C header.",
+  "added_build_requirement": "nvidia-nvml-dev==13.0.87 (header-only, SHA256 pinned)",
+  "upstream_runtime_pins_changed": false,
+  "transformer_engine_commit": "42b840051647eef89761a16dfdff87e82bb253ab",
+  "versions_lock_sha256": "316e522bf4578a5856bd0cab8d5a158aa9a2579359b2339fa30333baad783b4d",
+  "recovery_command": "python3 scripts/install_local_packages.py --backend mcore --resume-from-source transformer-engine",
+  "resume_behavior": [
+    "Skip earlier base backend, MCore registry and already-completed MCore sources.",
+    "Keep existing Transformer Engine build/cmake and compiler/architecture settings.",
+    "Continue TE, Megatron-LM/Bridge, MCore NeMo installation, then normal vLLM setup.",
+    "Run final runtime validation and generate activation; no second full-setup invocation required."
+  ],
+  "early_checks": [
+    "Install both hash-pinned header wheels before CUDA source probes.",
+    "Include nvml.h in generic host toolchain probe.",
+    "Compile the exact pinned TE cuda_nvml.cpp in C++17 syntax mode before TE CMake build."
+  ],
+  "test_results": {
+    "tests": "37",
+    "errors": "0",
+    "failures": "0",
+    "skipped": "0"
+  },
+  "real_source_validation": "validation/te_nvml_real_probe.json",
+  "object_reuse_validation": "test_ninja_resume_after_header_fix_keeps_completed_objects: real CMake reconfigure and Ninja rebuild preserve completed object bytes and mtime.",
+  "limits": [
+    "Complete TE CUDA wheel and target B200 runtime are not validated on this RTX3090 host.",
+    "Ninja object reuse requires unchanged source, compile configuration and build paths.",
+    "Later vLLM dependencies not installed previously still require their initial installation."
+  ]
+}

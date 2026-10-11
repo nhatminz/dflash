@@ -1,3 +1,4 @@
 # Development headers missing from the upstream Python runtime lock.
 # CUDA 13.0 Update 1; header-only, no runtime dependency changes.
 nvidia-cuda-profiler-api==13.0.85 --hash=sha256:73d2671deac833db6686d6fbde4753fa3a3a497d87540fc246f081f375243f66
+nvidia-nvml-dev==13.0.87 --hash=sha256:082871368275cf6620fc900f55d8eaf2563b263a38a00a5168e9650bce963ba1

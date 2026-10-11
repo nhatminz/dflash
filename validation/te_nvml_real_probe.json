@@ -1,0 +1,105 @@
+{
+  "artifacts": [
+    {
+      "name": "nvidia-cuda-runtime",
+      "version": "13.0.96",
+      "url": "https://files.pythonhosted.org/packages/2e/24/d1558f3b68b1d26e706813b1d10aa1d785e4698c425af8db8edc3dced472/nvidia_cuda_runtime-13.0.96-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl",
+      "pypi_wheel_sha256": "7f82250d7782aa23b6cfe765ecc7db554bd3c2870c43f3d1821f1d18aebf0548",
+      "extracted_header_entries": 96,
+      "header_entry_crc_verified": true,
+      "whole_wheel_sha256_recomputed": false
+    },
+    {
+      "name": "nvidia-cuda-crt",
+      "version": "13.0.88",
+      "url": "https://files.pythonhosted.org/packages/05/69/a1ec4d9f0747d85964206feb47bf359f48a2d6af74c0add8abba6efe3dda/nvidia_cuda_crt-13.0.88-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl",
+      "pypi_wheel_sha256": "2c8043c7c9e02492716426e9919fc78d2c5b3b2a7a768a88e952676b08aa55a4",
+      "extracted_header_entries": 30,
+      "header_entry_crc_verified": true,
+      "whole_wheel_sha256_recomputed": false
+    },
+    {
+      "name": "nvidia-cuda-cccl",
+      "version": "13.3.3.4.1",
+      "url": "https://files.pythonhosted.org/packages/f8/ab/049726d90147865a3ea53bae6cb7c35b98bf1fdf96cdb967101329625f83/nvidia_cuda_cccl-13.3.3.4.1-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl",
+      "pypi_wheel_sha256": "cc0adc188d570b09f4d606c7dc05a42aa3d8aa082e0d60f7bbfc5b6435f627c6",
+      "extracted_header_entries": 2000,
+      "header_entry_crc_verified": true,
+      "whole_wheel_sha256_recomputed": false
+    },
+    {
+      "name": "nvidia-nvtx",
+      "version": "13.0.85",
+      "url": "https://files.pythonhosted.org/packages/c2/f3/d86c845465a2723ad7e1e5c36dcd75ddb82898b3f53be47ebd429fb2fa5d/nvidia_nvtx-13.0.85-py3-none-manylinux1_x86_64.manylinux_2_5_x86_64.whl",
+      "pypi_wheel_sha256": "4936d1d6780fbe68db454f5e72a42ff64d1fd6397df9f363ae786930fd5c1cd4",
+      "extracted_header_entries": 40,
+      "header_entry_crc_verified": true,
+      "whole_wheel_sha256_recomputed": false
+    },
+    {
+      "name": "nvidia-cublas",
+      "version": "13.5.1.27",
+      "url": "https://files.pythonhosted.org/packages/ce/0d/cc77458e8fb0634597e3994650c2853ee785f2fc61bf370bbb304021cca1/nvidia_cublas-13.5.1.27-py3-none-manylinux_2_27_x86_64.whl",
+      "pypi_wheel_sha256": "db3a1f0c8bc24945a4d195ba199d83f27e650ffdfc0c32e6b8362c314f14d553",
+      "extracted_header_entries": 11,
+      "header_entry_crc_verified": true,
+      "whole_wheel_sha256_recomputed": false
+    },
+    {
+      "name": "nvidia-cudnn-cu13",
+      "version": "9.20.0.48",
+      "url": "https://files.pythonhosted.org/packages/6e/5e/edb9c0ae051602c3ccaffe424256463636d639e27d7f302dde9975ef9e7a/nvidia_cudnn_cu13-9.20.0.48-py3-none-manylinux_2_27_x86_64.whl",
+      "pypi_wheel_sha256": "0c45dd8eeb50b603f07995b1b300c62ffe6a1980482b82b3bcf94a4ca9d49304",
+      "extracted_header_entries": 19,
+      "header_entry_crc_verified": true,
+      "whole_wheel_sha256_recomputed": false
+    },
+    {
+      "name": "nvidia-cuda-nvrtc",
+      "version": "13.0.88",
+      "url": "https://files.pythonhosted.org/packages/c3/68/483a78f5e8f31b08fb1bb671559968c0ca3a065ac7acabfc7cee55214fd6/nvidia_cuda_nvrtc-13.0.88-py3-none-manylinux2010_x86_64.manylinux_2_12_x86_64.whl",
+      "pypi_wheel_sha256": "ad9b6d2ead2435f11cbb6868809d2adeeee302e9bb94bcf0539c7a40d80e8575",
+      "extracted_header_entries": 6,
+      "header_entry_crc_verified": true,
+      "whole_wheel_sha256_recomputed": false
+    },
+    {
+      "name": "nvidia-nccl-cu13",
+      "version": "2.30.7",
+      "url": "https://files.pythonhosted.org/packages/3f/34/c500f90c7ae641b8e0f98965b36b8a7ac79cc8b296e8d251fe3eb592ee54/nvidia_nccl_cu13-2.30.7-py3-none-manylinux_2_18_x86_64.whl",
+      "pypi_wheel_sha256": "cefa7fdb9710efd0f39c5f1be1d61ff6fc9a996c451265bd7fbdcf9455ed4b50",
+      "extracted_header_entries": 60,
+      "header_entry_crc_verified": true,
+      "whole_wheel_sha256_recomputed": false
+    }
+  ],
+  "upstream_runtime_pins_changed": false,
+  "full_transformer_engine_wheel_tested": false,
+  "B200_runtime_verified": false,
+  "exact_pinned_translation_missing_nvml_reproduced": true,
+  "exact_pinned_translation_cxx17_passed": true,
+  "hash_pinned_header_wheels_installed_without_index": true,
+  "exact_pinned_translation_optimized_object_bytes": 108848,
+  "source_archive": {
+    "url": "https://codeload.github.com/NVIDIA/TransformerEngine/tar.gz/42b840051647eef89761a16dfdff87e82bb253ab",
+    "sha256": "ad254f73261347a87cd15fa8af416148dcdb17b9bc95bf23283d5b6a4e842c01",
+    "commit": "42b840051647eef89761a16dfdff87e82bb253ab"
+  },
+  "temporary_data_removed_after_probe": true,
+  "added_header_artifacts": [
+    {
+      "package": "nvidia-cuda-profiler-api",
+      "version": "13.0.85",
+      "path": "offline_packages/toolchain_wheels/nvidia_cuda_profiler_api-13.0.85-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl",
+      "sha256": "73d2671deac833db6686d6fbde4753fa3a3a497d87540fc246f081f375243f66",
+      "whole_wheel_sha256_verified": true
+    },
+    {
+      "package": "nvidia-nvml-dev",
+      "version": "13.0.87",
+      "path": "offline_packages/toolchain_wheels/nvidia_nvml_dev-13.0.87-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl",
+      "sha256": "082871368275cf6620fc900f55d8eaf2563b263a38a00a5168e9650bce963ba1",
+      "whole_wheel_sha256_verified": true
+    }
+  ]
+}

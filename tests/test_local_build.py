@@ -311,3 +311,59 @@ def test_deep_ep_probe_compiler_failure_prevents_load(tmp_path, module, monkeypa
             sys.executable, {"CUDA_HOME": "/cuda", "CC": "/usr/bin/gcc"}, tmp_path
         )
     assert len(calls) == 1
+
+
+def test_transformer_engine_nvml_preflight_uses_pinned_file_and_fails_early(tmp_path, module):
+    source = tmp_path / "transformer-engine"
+    translation = source / "transformer_engine/common/util/cuda_nvml.cpp"
+    translation.parent.mkdir(parents=True)
+    translation.write_text('#include "dflash_nvml_missing_fixture.h"\n')
+    with pytest.raises(RuntimeError, match="dflash_nvml_missing_fixture.h"):
+        module.check_transformer_engine_headers(
+            dict(os.environ, CXX=shutil.which("g++")), source, tmp_path / "logs"
+        )
+    assert translation.read_text() == '#include "dflash_nvml_missing_fixture.h"\n'
+
+
+def test_ninja_resume_after_header_fix_keeps_completed_objects(tmp_path):
+    # Reproduce a late missing header with real CMake/Ninja/G++. Adding CPATH
+    # must compile the failed file while preserving successful object files.
+    cmake, ninja, compiler = shutil.which("cmake"), shutil.which("ninja"), shutil.which("g++")
+    assert cmake and ninja and compiler
+    source, build = tmp_path / "source", tmp_path / "build"
+    source.mkdir()
+    (source / "CMakeLists.txt").write_text(
+        "cmake_minimum_required(VERSION 3.21)\nproject(resume_probe LANGUAGES CXX)\n"
+        "add_library(resume_probe STATIC completed.cpp missing.cpp)\n"
+    )
+    (source / "completed.cpp").write_text("int completed() { return 69; }\n")
+    (source / "missing.cpp").write_text(
+        "#include <dflash_nvml_header_fixture.h>\nint missing() { return NVML_HEADER_FIXTURE; }\n"
+    )
+    env = os.environ.copy()
+    configure = [
+        cmake,
+        "-S",
+        str(source),
+        "-B",
+        str(build),
+        "-G",
+        "Ninja",
+        "-DCMAKE_CXX_COMPILER=" + compiler,
+    ]
+    subprocess.run(configure, env=env, check=True, capture_output=True)
+    command = [cmake, "--build", str(build), "--parallel", "1", "--verbose"]
+    failed = subprocess.run(command, env=env, capture_output=True, text=True)
+    assert failed.returncode and "dflash_nvml_header_fixture.h" in failed.stdout
+    completed = build / "CMakeFiles/resume_probe.dir/completed.cpp.o"
+    old_bytes, old_time = completed.read_bytes(), completed.stat().st_mtime_ns
+    include = tmp_path / "new-header"
+    include.mkdir()
+    (include / "dflash_nvml_header_fixture.h").write_text("#define NVML_HEADER_FIXTURE 13\n")
+    env["CPATH"] = str(include) + os.pathsep + env.get("CPATH", "")
+    # TE's setup.py re-runs configure even when build/cmake already exists.
+    subprocess.run(configure, env=env, check=True, capture_output=True)
+    resumed = subprocess.run(command, env=env, check=True, capture_output=True, text=True)
+    assert str(source / "missing.cpp") in resumed.stdout
+    assert str(source / "completed.cpp") not in resumed.stdout
+    assert completed.read_bytes() == old_bytes and completed.stat().st_mtime_ns == old_time

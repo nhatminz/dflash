@@ -20,6 +20,7 @@ from pathlib import Path
 from local_build import (
     check_cuda_toolchain,
     check_deep_ep_toolchain,
+    check_transformer_engine_headers,
     cuda_build_environment,
     deep_ep_build_environment,
     pip_build_environment,
@@ -82,6 +83,66 @@ def source_order(line):
     ]
     name = line.rstrip("/").rsplit("/", 1)[-1]
     return names.index(name) if name in names else len(names)
+
+
+def installation_schedule(plan, *, backend="mcore", retry_source=None, resume_from_source=None):
+    """Select a source boundary before mutating any environment.
+
+    Resume trusts the user's explicit completed boundary: earlier backends
+    and sources are not installed again. Later backends still receive their
+    full registry/source setup, followed by the normal runtime qualification.
+    """
+    if retry_source and resume_from_source:
+        raise RuntimeError("Choose either --retry-source or --resume-from-source")
+    order = ("base", "mcore", "vllm")
+    requested = retry_source or resume_from_source
+    selected = None
+    if requested:
+        lines = sorted(plan["requirements"][backend]["sources"], key=source_order)
+        selected = next(
+            (i for i, line in enumerate(lines) if line.rstrip("/").rsplit("/", 1)[-1] == requested),
+            None,
+        )
+        if selected is None:
+            raise RuntimeError(f"No staged source {requested!r} in backend {backend}")
+    result = []
+    for current in order:
+        if retry_source and current != backend:
+            continue
+        if resume_from_source and order.index(current) < order.index(backend):
+            continue
+        lines = sorted(plan["requirements"][current]["sources"], key=source_order)
+        reuse_registry = bool(requested and current == backend)
+        if reuse_registry:
+            lines = lines[selected : selected + 1] if retry_source else lines[selected:]
+        result.append((current, lines, reuse_registry))
+    return result
+
+
+def install_cuda_build_headers(python, env, destination, logs):
+    """Install only hash-pinned development headers; bundled wheels need no index."""
+    wheels = destination / "toolchain_wheels"
+    command = [
+        str(python),
+        "-m",
+        "pip",
+        "install",
+        "--no-deps",
+        "--require-hashes",
+        "-r",
+        str(ROOT / "requirements-build-cuda13.txt"),
+    ]
+    if wheels.is_dir():
+        command += ["--find-links", str(wheels)]
+        if all(
+            any(wheels.glob(pattern))
+            for pattern in (
+                "nvidia_cuda_profiler_api-13.0.85-*.whl",
+                "nvidia_nvml_dev-13.0.87-*.whl",
+            )
+        ):
+            command += ["--no-index"]
+    run_logged(command, logs / "cuda-build-headers.log", cwd=ROOT, env=pip_build_environment(env))
 
 
 def bootstrap_lines(lines):
@@ -236,14 +297,19 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--skip-runtime-check", action="store_true")
     parser.add_argument("--check-only", action="store_true")
-    parser.add_argument(
+    recovery = parser.add_mutually_exclusive_group()
+    recovery.add_argument(
         "--retry-source", help="Rebuild only this staged source in an existing backend"
+    )
+    recovery.add_argument(
+        "--resume-from-source",
+        help="Continue setup at this source in --backend, preserving earlier completed installs",
     )
     parser.add_argument(
         "--backend",
         choices=("base", "mcore", "vllm"),
         default="mcore",
-        help="Backend used by --retry-source (default: mcore)",
+        help="Backend used by --retry-source or --resume-from-source (default: mcore)",
     )
     args = parser.parse_args()
     if sys.version_info < (3, 12):
@@ -252,6 +318,12 @@ def main():
         )
     destination = ROOT / "offline_packages"
     plan = json.loads((destination / "manifest.json").read_text())
+    schedule = installation_schedule(
+        plan,
+        backend=args.backend,
+        retry_source=args.retry_source,
+        resume_from_source=args.resume_from_source,
+    )
     verify(plan)
     env = dict(
         os.environ,
@@ -295,24 +367,33 @@ def main():
         NVTE_FRAMEWORK="pytorch",
     )
     interpreters = {}
+    if args.resume_from_source:
+        # No automatic inference from version metadata: local Git packages
+        # can share a version across commits. The boundary is explicitly supplied.
+        for backend in ("base", "mcore", "vllm"):
+            path = ROOT / (".venv-local" if backend == "base" else f".venv-local-{backend}")
+            executable = path / "bin/python"
+            if not executable.is_file():
+                raise RuntimeError(f"Resume requires the earlier/selected environment: {path}")
+            subprocess.run(
+                [
+                    str(executable),
+                    "-c",
+                    "import sys; assert (3,13,14) <= sys.version_info[:3] < (3,14,0)",
+                ],
+                check=True,
+            )
+            interpreters[backend] = str(executable)
+            if backend == args.backend:
+                break
     log_root = destination / "build_logs" / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
     upstream = tomllib.loads((ROOT / "third_party/nemo-rl/pyproject.toml").read_text())
     no_isolation = {
         name.lower().replace("_", "-")
         for name in upstream["tool"]["uv"]["no-build-isolation-package"]
     }
-    for backend, items in plan["requirements"].items():
-        if args.retry_source and backend != args.backend:
-            continue
-        source_lines = sorted(items["sources"], key=source_order)
-        if args.retry_source:
-            source_lines = [
-                line
-                for line in source_lines
-                if line.rstrip("/").rsplit("/", 1)[-1] == args.retry_source
-            ]
-            if not source_lines:
-                raise RuntimeError(f"No staged source {args.retry_source!r} in backend {backend}")
+    for backend, source_lines, reuse_registry in schedule:
+        items = plan["requirements"][backend]
         path = ROOT / (".venv-local" if backend == "base" else f".venv-local-{backend}")
         executable = path / "bin/python"
         if executable.exists():
@@ -325,13 +406,13 @@ def main():
                 check=True,
             )
         else:
-            if args.retry_source:
+            if reuse_registry:
                 raise RuntimeError(f"Retry requires an existing {path}; run full setup first")
             subprocess.run(["uv", "venv", str(path), "--python", str(python)], env=env, check=True)
         build_env = dict(env, VIRTUAL_ENV=str(path), PATH=f"{path}/bin:{env['PATH']}")
         command = ["uv", "pip", "install", "--python", str(executable), "--no-deps"]
         # Build tooling can come from the configured PyPI/internal index.
-        if not args.retry_source:
+        if not reuse_registry:
             subprocess.run(
                 command + ["wheel>=0.46.2", "cmake>=3.21"], cwd=ROOT, env=build_env, check=True
             )
@@ -356,6 +437,7 @@ def main():
             build_env.setdefault("CUDNN_HOME", str(cudnn))
         logs = log_root / backend
         if backend in {"mcore", "vllm"}:
+            install_cuda_build_headers(executable, build_env, destination, logs)
             build_env = cuda_build_environment(build_env, site_packages)
             check_cuda_toolchain(executable, build_env, logs)
         for line in source_lines:
@@ -364,30 +446,10 @@ def main():
             if name == "nvidia-resiliency-ext":
                 source_env = resiliency_cupti_environment(executable, source_env)
             if name == "deep-ep":
-                # The CUDA runtime lock does not include profiler development
-                # headers. Install only this hash-pinned, header-only supplement;
-                # the small transfer patch also carries its wheel for no-index use.
-                wheels = destination / "toolchain_wheels"
-                supplement = [
-                    str(executable),
-                    "-m",
-                    "pip",
-                    "install",
-                    "--no-deps",
-                    "--require-hashes",
-                    "-r",
-                    str(ROOT / "requirements-build-cuda13.txt"),
-                ]
-                if any(wheels.glob("nvidia_cuda_profiler_api-13.0.85-*.whl")):
-                    supplement += ["--no-index", "--find-links", str(wheels)]
-                run_logged(
-                    supplement,
-                    logs / "deep-ep-headers.log",
-                    cwd=ROOT,
-                    env=pip_build_environment(source_env),
-                )
                 source_env = deep_ep_build_environment(source_env, site_packages)
                 check_deep_ep_toolchain(executable, source_env, logs)
+            if name == "transformer-engine":
+                check_transformer_engine_headers(source_env, ROOT / shlex.split(line)[-1], logs)
             # pip streams the complete backend output with --verbose. uv's
             # failure summary can truncate the first compiler error behind
             # thousands of successful ptxas messages from another Ninja job.

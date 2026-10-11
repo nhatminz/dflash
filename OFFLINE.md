@@ -144,14 +144,51 @@ fi
 
 ### Source build CUDA 13 và log lỗi Ninja
 
+Lỗi Transformer Engine tại `util/cuda_nvml.h: fatal error: nvml.h` cần
+`nvidia-nvml-dev==13.0.87`. Gói NVIDIA này chỉ chứa header C/C++, không thay
+driver hay `libnvidia-ml.so.1`; `nvidia-ml-py`/`pynvml` không cung cấp header đó.
+Bản vá `b200_transfer/dflash_b200_te_nvml_resume_fix.zip` chứa cả wheel NVML
+(125 KB) và profiler (21 KB), cùng SHA256 trong `requirements-build-cuda13.txt`.
+Installer cài chúng trước probe/source CUDA, kiểm tra `nvml.h` ngay từ đầu và
+compile thử chính `cuda_nvml.cpp` của TE đã pin trước build lớn.
+
+Đã cài đến Transformer Engine trong MCore thì dùng **resume**, không chạy lại
+full setup sau lệnh này:
+
+```bash
+cd /workspace/storage-shared/nlp/minhpn19/dflash
+unzip -oq library/dflash_b200_te_nvml_resume_fix.zip
+export CUDA_HOME="${CUDA_HOME:-/usr/local/cuda}"
+export PATH="$CUDA_HOME/bin:$PATH"
+python3 scripts/install_local_packages.py --backend mcore \
+  --resume-from-source transformer-engine \
+  && source offline_packages/activate.sh
+```
+
+Resume bỏ qua backend `base`, registry MCore và các source trước TE; cài tiếp
+TE/Megatron-LM/Bridge, hoàn tất NeMo MCore, rồi setup backend vLLM và chạy kiểm
+tra runtime như full setup. Các backend trước/đang resume phải có Python đã
+tạo. Đây là ranh giới do người chạy chỉ định dựa vào log đã hoàn tất, không
+suy đoán thành công chỉ từ version metadata. Các dependency vLLM chưa từng
+cài vẫn cần được cài lần đầu qua bundle/index đang có.
+
+Không xóa `.venv-local*`, source TE hay `transformer-engine/build/cmake`.
+Bản vá không đổi architecture/compiler/CMake flags; headers được bổ sung qua
+đường dẫn môi trường. Ninja tái sử dụng object đã hoàn thành khi cấu hình,
+source và đường dẫn build giữ nguyên; số bước hiển thị có thể bắt đầu lại.
+Kiểm chứng: `validation/te_nvml_real_probe.json` compile chính translation unit
+bị lỗi; `validation/te_nvml_resume_tests.xml` kiểm tra luồng resume và giữ
+object qua một lần configure/build CMake/Ninja thật.
+
 Lỗi DeepEP `allocator.cuh: fatal error: cuda_profiler_api.h: No such file or
 directory` cần thêm **development headers**, không phải đổi commit DeepEP.
 Installer bổ sung `nvidia-cuda-profiler-api==13.0.85` theo SHA256 trong
-`requirements-build-cuda13.txt` ngay trước bước DeepEP, áp dụng cả full setup
-và `--retry-source deep-ep`. Đây là gói chỉ chứa headers; các pin runtime và
+`requirements-build-cuda13.txt` trước probe/source CUDA, áp dụng cả full setup,
+resume và `--retry-source deep-ep`. Đây là gói chỉ chứa headers; các pin runtime và
 upstream lock giữ nguyên. ZIP sửa lỗi mang sẵn wheel 21 KB trong
 `offline_packages/toolchain_wheels/`, được cài bằng `--no-index --require-hashes`.
-Nếu không có wheel local, installer dùng pip index đã cấu hình.
+ZIP mới nhất chứa đủ cả hai wheel development. Nếu bundle thiếu một wheel,
+installer dùng thêm pip index đã cấu hình.
 
 HybridEP ở commit đã pin còn link `-lnvtx3interop`. Wheel NVTX đã có trong lock
 chỉ chứa `libnvtx3interop.so.1`: installer tạo symlink tương đối `.so`, bổ sung
