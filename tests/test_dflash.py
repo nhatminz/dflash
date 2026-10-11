@@ -112,13 +112,19 @@ def test_actual_original_dflash_forward_backward_and_save(tmp_path, device):
 
 
 def test_supported_contract():
-    target = dict(model_type="qwen3", num_hidden_layers=36, hidden_size=4096, vocab_size=151936)
+    target = dict(
+        model_type="qwen3",
+        num_hidden_layers=36,
+        hidden_size=4096,
+        num_attention_heads=32,
+        vocab_size=151936,
+    )
     assert draft_config(target, block_size=16)["dflash_config"]["block_size"] == 16
     for size in (0, 1, 65):
         with pytest.raises(ValueError):
             draft_config(target, block_size=size)
     with pytest.raises(ValueError):
-        draft_config(dict(target, model_type="qwen2"))
+        draft_config(dict(target, model_type="llama"))
 
 
 def test_header_validation_before_allocating_weights(tmp_path):

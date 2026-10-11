@@ -1,0 +1,67 @@
+{
+  "status": "Implemented with bounded validation; full B200 pretraining and GRPO unverified",
+  "models": [
+    "qwen25_1p5b",
+    "qwen25_3b",
+    "qwen25_7b",
+    "qwen25_14b",
+    "qwen3_1p7b",
+    "qwen3_4b"
+  ],
+  "excluded": "llama31_8b",
+  "default_profile": "native_dflash",
+  "optional_existing_model": "qwen3_8b",
+  "new_launchers": [
+    "pretrain_qwen25_1p5b.sh",
+    "train_qwen25_1p5b.sh",
+    "train_qwen25_1p5b_dflash.sh",
+    "pretrain_qwen25_3b.sh",
+    "train_qwen25_3b.sh",
+    "train_qwen25_3b_dflash.sh",
+    "pretrain_qwen25_7b.sh",
+    "train_qwen25_7b.sh",
+    "train_qwen25_7b_dflash.sh",
+    "pretrain_qwen25_14b.sh",
+    "train_qwen25_14b.sh",
+    "train_qwen25_14b_dflash.sh"
+  ],
+  "qwen25_target": "Original Qwen2ForCausalLM, biased QKV retained; no target/tokenizer mutation",
+  "qwen25_draft": "Independently initialized headless bias-free Qwen3-style DFlash with target dimensions/GQA/vocab/RoPE base and full block attention",
+  "shared_weights": [
+    "target embedding",
+    "target LM head"
+  ],
+  "pretrain_qwen25_physical_batch": 1,
+  "pretrain_qwen25_accumulation": {
+    "qwen25_1p5b": 16,
+    "qwen25_3b": 8,
+    "qwen25_7b": 4,
+    "qwen25_14b": 2
+  },
+  "pretrain_effective_batch_reference": "Actual SpecNaacl pretrain CLI (PRETRAIN_ACCUMULATION_STEPS=1), not unused DRAFT_PRETRAIN_* labels",
+  "validation": {
+    "tests": 98,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "wrapper_dry_runs": 21,
+    "ruff_check": true,
+    "ruff_format": true,
+    "compileall": true,
+    "bash_syntax": true,
+    "concurrent_pretrain_check": "Six concurrent dry runs only; distinct model run paths"
+  },
+  "specnaacl_unchanged": true,
+  "upstream_sources": {
+    "nemo-rl": "c18e462adf34739951b3d21773f436eaee324b31",
+    "vllm": "752a3a504485790a2e8491cacbb35c137339ad34",
+    "original-dflash": "07ebd93db9f472af339b644bb70221ad8428328a"
+  },
+  "official_reference_configs": "../third_party/reference_qwen25_revisions.json",
+  "strict_cross_framework_equivalence": false,
+  "limitations": [
+    "No full B200 pretrain or live NeMo/vLLM GRPO run",
+    "Native target uses full fine-tuning; prior strict fairness blockers remain",
+    "Qwen3 existing pretraining defaults retained; its effective batch is not adjusted to SpecNaacl in this change"
+  ]
+}

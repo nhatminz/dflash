@@ -17,7 +17,7 @@ from tqdm.auto import tqdm
 from .adapter import initialize_projector
 from .checkpointing import atomic_link, atomic_save, restore_rng, rng_state
 from .data import ShareGPTCollator, load_sharegpt
-from .model_contract import draft_config, fingerprint, validate_checkpoint
+from .model_contract import draft_config, fingerprint, validate_checkpoint, validate_mask_token
 
 
 def make_model(target_config, *, block_size, layers, mask_id, warm_start=None):
@@ -114,12 +114,19 @@ def main():
 
     model_path, data_path = Path(a.model), Path(a.data)
     fingerprint(model_path)  # Fails before any model/CUDA allocation.
+    draft_config(
+        json.loads((model_path / "config.json").read_text()),
+        block_size=a.block_size,
+        num_layers=a.layers,
+        mask_token_id=a.mask_id,
+    )
+    validate_mask_token(model_path, a.mask_id)
     if not data_path.is_file():
         raise FileNotFoundError(data_path)
     if a.warm_start:
         validate_checkpoint(model_path, a.warm_start, a.block_size)
     tokenizer = AutoTokenizer.from_pretrained(a.model, local_files_only=True)
-    # Official Qwen3 DFlash uses unused padded embedding row 151669, not
+    # Supported Qwen tokenizers use unused padded embedding row 151669, not
     # <|fim_pad|> (151662). Validate before allocating target weights on CUDA.
     if a.mask_id in {tokenizer.eos_token_id, tokenizer.bos_token_id, tokenizer.pad_token_id}:
         raise ValueError("MASK embedding must be distinct from EOS/BOS/PAD")

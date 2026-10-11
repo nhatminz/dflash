@@ -1,0 +1,22 @@
+{
+  "Qwen/Qwen2.5-1.5B-Instruct": {
+    "sha": "989aa7980e4cf806f80c7fef2b1adb7bc71aa306",
+    "config_url": "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct/resolve/989aa7980e4cf806f80c7fef2b1adb7bc71aa306/config.json",
+    "reference_config": "reference_qwen25_1p5b_config.json"
+  },
+  "Qwen/Qwen2.5-3B-Instruct": {
+    "sha": "aa8e72537993ba99e69dfaafa59ed015b17504d1",
+    "config_url": "https://huggingface.co/Qwen/Qwen2.5-3B-Instruct/resolve/aa8e72537993ba99e69dfaafa59ed015b17504d1/config.json",
+    "reference_config": "reference_qwen25_3b_config.json"
+  },
+  "Qwen/Qwen2.5-7B-Instruct": {
+    "sha": "a09a35458c702b33eeacc393d103063234e8bc28",
+    "config_url": "https://huggingface.co/Qwen/Qwen2.5-7B-Instruct/resolve/a09a35458c702b33eeacc393d103063234e8bc28/config.json",
+    "reference_config": "reference_qwen25_7b_config.json"
+  },
+  "Qwen/Qwen2.5-14B-Instruct": {
+    "sha": "cf98f3b3bbb457ad9e2bb7baf9a0125b6b88caa8",
+    "config_url": "https://huggingface.co/Qwen/Qwen2.5-14B-Instruct/resolve/cf98f3b3bbb457ad9e2bb7baf9a0125b6b88caa8/config.json",
+    "reference_config": "reference_qwen25_14b_config.json"
+  }
+}

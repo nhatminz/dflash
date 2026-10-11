@@ -20,16 +20,17 @@ def fingerprint(model):
 
 
 def draft_config(target, *, block_size=16, num_layers=3, mask_token_id=None):
-    if target["model_type"] != "qwen3" or target.get("attention_bias", False):
-        raise ValueError(
-            "pinned NVIDIA DFlash supports bias-free Qwen3 here; Qwen2.5 is not advertised"
-        )
+    if target["model_type"] not in {"qwen2", "qwen3"}:
+        raise ValueError("DFlash target must be a dense Qwen2.5 or Qwen3 model")
+    if target["model_type"] == "qwen3" and target.get("attention_bias", False):
+        raise ValueError("Qwen3 target must use its standard bias-free attention")
     if not 2 <= block_size <= 64:
         raise ValueError("DFLASH_BLOCK_SIZE includes the anchor and must be in [2,64]")
     if num_layers < 1:
         raise ValueError("DFLASH_LAYERS must be positive")
     if mask_token_id is None:
-        # Official DFlash uses the first unused Qwen3 padded embedding row.
+        # This unused padded embedding row is shared by the supported Qwen
+        # tokenizers. Validate the actual local vocabulary before training.
         mask_token_id = 151669
     if not 0 <= mask_token_id < target["vocab_size"]:
         raise ValueError("MASK id is outside the target vocabulary")
@@ -51,7 +52,38 @@ def draft_config(target, *, block_size=16, num_layers=3, mask_token_id=None):
             causal=False,
         ),
     )
+    if target["model_type"] == "qwen2":
+        # The drafter is an independently initialized Qwen3-style network.
+        # Qwen2.5 target QKV biases are not drafter parameters. Normalize only
+        # this new family so existing Qwen3 pretraining resume contracts stay
+        # byte-for-byte equivalent at the configuration level.
+        config.update(
+            head_dim=target.get("head_dim")
+            or target["hidden_size"] // target["num_attention_heads"],
+            mlp_bias=False,
+            sliding_window=None,
+            use_sliding_window=False,
+        )
     return config
+
+
+def validate_mask_token(target_path, mask_token_id):
+    """Require a real, unused embedding row without loading target weights."""
+    path = Path(target_path)
+    target = json.loads((path / "config.json").read_text())
+    if not 0 <= mask_token_id < target["vocab_size"]:
+        raise ValueError("MASK id is outside the target vocabulary")
+    tokenizer = json.loads((path / "tokenizer.json").read_text())
+    used = set(tokenizer.get("model", {}).get("vocab", {}).values())
+    used.update(token["id"] for token in tokenizer.get("added_tokens", []))
+    tokenizer_config = json.loads((path / "tokenizer_config.json").read_text())
+    used.update(int(token_id) for token_id in tokenizer_config.get("added_tokens_decoder", {}))
+    for name in ("bos_token_id", "eos_token_id", "pad_token_id"):
+        value = target.get(name)
+        if mask_token_id == value or isinstance(value, list) and mask_token_id in value:
+            raise ValueError("MASK embedding must be distinct from EOS/BOS/PAD")
+    if mask_token_id in used:
+        raise ValueError("DFlash MASK must be an unused target embedding row")
 
 
 def validate_checkpoint(target_path, checkpoint, block_size):
@@ -65,15 +97,20 @@ def validate_checkpoint(target_path, checkpoint, block_size):
         "vocab_size",
         "num_attention_heads",
         "num_key_value_heads",
-        "head_dim",
     ):
         if draft.get(key) != target.get(key):
             raise ValueError(f"target/draft {key} mismatch: {target.get(key)} vs {draft.get(key)}")
+    target_hd = target.get("head_dim") or target["hidden_size"] // target["num_attention_heads"]
+    draft_hd = draft.get("head_dim") or draft["hidden_size"] // draft["num_attention_heads"]
+    if target_hd != draft_hd:
+        raise ValueError(f"target/draft head_dim mismatch: {target_hd} vs {draft_hd}")
     d = draft["dflash_config"]
     if d.get("block_size", draft.get("block_size")) != block_size:
         raise ValueError("checkpoint block size differs from DFLASH_BLOCK_SIZE")
     if (
-        draft.get("attention_bias")
+        draft.get("model_type") != "qwen3"
+        or draft.get("attention_bias")
+        or draft.get("mlp_bias")
         or d.get("causal")
         or draft.get("sliding_window")
         or d.get("use_swa")
@@ -84,8 +121,9 @@ def validate_checkpoint(target_path, checkpoint, block_size):
         raise ValueError(
             "Reflex selected-head feedback requires an unquantized, unit-scale shared LM head"
         )
-    if target["model_type"] != "qwen3" or target.get("attention_bias", False):
-        raise ValueError("only Qwen3 targets are supported by this pinned backend")
+    # Validate the target family separately from the bias-free draft network.
+    draft_config(target, block_size=block_size, mask_token_id=d["mask_token_id"])
+    validate_mask_token(target_path, d["mask_token_id"])
     if not 0 <= d["mask_token_id"] < target["vocab_size"]:
         raise ValueError("invalid checkpoint MASK id")
     if not all(0 <= i < target["num_hidden_layers"] for i in d["target_layer_ids"]):
@@ -98,6 +136,8 @@ def validate_checkpoint(target_path, checkpoint, block_size):
             raise ValueError("draft belongs to a different target/tokenizer checkpoint")
     else:
         # Explicitly allow the audited z-lab 8B contract, not arbitrary weights.
+        if target["model_type"] != "qwen3":
+            raise ValueError("Qwen2.5 draft checkpoints require a target fingerprint manifest")
         reference = (
             Path(__file__).resolve().parents[1] / "third_party/reference_qwen3_8b_b16_config.json"
         )

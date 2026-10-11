@@ -453,7 +453,19 @@ def compare(model="qwen3_4b", dataset="simplelr", profile="native_dflash"):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--model", choices=["qwen3_1p7b", "qwen3_4b", "qwen3_8b"], default="qwen3_4b")
+    p.add_argument(
+        "--model",
+        choices=[
+            "qwen25_1p5b",
+            "qwen25_3b",
+            "qwen25_7b",
+            "qwen25_14b",
+            "qwen3_1p7b",
+            "qwen3_4b",
+            "qwen3_8b",
+        ],
+        default="qwen3_4b",
+    )
     p.add_argument("--dataset", choices=["simplelr", "gsm8k", "dapo"], default="simplelr")
     p.add_argument(
         "--profile", choices=["specnaacl_matched", "native_dflash"], default="native_dflash"

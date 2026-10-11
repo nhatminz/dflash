@@ -113,6 +113,59 @@ Reward dùng math-verify và hệ số format 0.2 của SpecNaacl, không so chu
 
 ## 3. Pretrain DFlash trên ShareGPT
 
+Bộ experiment gồm **6 model**, bỏ Llama: Qwen2.5-1.5B/3B/7B/14B-Instruct
+và Qwen3-1.7B/4B. Qwen2.5 dùng target nguyên bản có QKV bias; drafter DFlash
+được khởi tạo độc lập theo kiến trúc Qwen3 không bias, giữ đúng kích thước
+hidden/head/GQA/vocab và dùng embedding/LM head của target. Không đổi weights
+hoặc tokenizer target để giả làm Qwen3. Kiểm tra MASK 151669 trên tokenizer
+local chạy trước khi cấp phát weights lên GPU.
+
+| MODEL_KEY | Target dưới `/workspace/storage-shared/models/` | Batch GRPO × accumulation | Pretrain batch × accumulation |
+|---|---|---|---|
+| `qwen25_1p5b` | `Qwen2.5-1.5B-Instruct` | 16 × 2 | 1 × 16 |
+| `qwen25_3b` | `Qwen2.5-3B-Instruct` | 8 × 4 | 1 × 8 |
+| `qwen25_7b` | `Qwen2.5-7B-Instruct` | 8 × 4 | 1 × 4 |
+| `qwen25_14b` | `Qwen2.5-14B-Instruct` | 4 × 8 | 1 × 2 |
+| `qwen3_1p7b` | `Qwen3-1.7B` | 16 × 2 | 1 × 8 |
+| `qwen3_4b` | `Qwen3-4B` | 8 × 4 | 1 × 8 |
+
+Batch GRPO và accumulation lấy đúng cấu hình từng target của SpecNaacl.
+Pretrain Qwen2.5 dùng microbatch 1 để giới hạn VRAM; accumulation giữ batch
+hiệu dụng 16/8/4/2 như launcher pretrain thực tế của SpecNaacl (accumulation 1).
+Không lấy các biến `DRAFT_PRETRAIN_*` mà launcher SpecNaacl không truyền vào CLI.
+Đây vẫn là loss
+DFlash, khác Medusa, và native target GRPO vẫn full fine-tuning. Các mặc định
+Qwen3 đã có được giữ nguyên để không đổi cấu hình resume cũ.
+
+### Chạy đồng thời 6 model
+
+Cài môi trường một lần trước; cần 6 GPU có đủ VRAM và đủ RAM/CPU cho 6 job.
+Các lệnh sau chạy mới, mỗi job một GPU. `MODEL` đã export từ một lần chạy
+model cụ thể phải được xóa, nếu không nó ghi đè đường dẫn của mọi wrapper.
+
+```bash
+cd /đường/dẫn/SpecDecode/dflash
+unset MODEL MODEL_KEY MODEL_ENV RUN_NAME RUN_DIR RESUME DRAFT_CHECKPOINT
+unset PRETRAIN_WARM_START FAIRNESS_PROFILE
+export NPROC_PER_NODE=1
+mkdir -p outputs/launch_logs
+CUDA_VISIBLE_DEVICES=0 bash pretrain_qwen25_1p5b.sh > outputs/launch_logs/qwen25_1p5b.log 2>&1 &
+CUDA_VISIBLE_DEVICES=1 bash pretrain_qwen25_3b.sh > outputs/launch_logs/qwen25_3b.log 2>&1 &
+CUDA_VISIBLE_DEVICES=2 bash pretrain_qwen25_7b.sh > outputs/launch_logs/qwen25_7b.log 2>&1 &
+CUDA_VISIBLE_DEVICES=3 bash pretrain_qwen25_14b.sh > outputs/launch_logs/qwen25_14b.log 2>&1 &
+CUDA_VISIBLE_DEVICES=4 bash pretrain_qwen3_1p7b.sh > outputs/launch_logs/qwen3_1p7b.log 2>&1 &
+CUDA_VISIBLE_DEVICES=5 bash pretrain_qwen3_4b.sh > outputs/launch_logs/qwen3_4b.log 2>&1 &
+wait
+```
+
+Mỗi model ghi vào `outputs/pretrain/<MODEL_KEY>/`; không dùng chung checkpoint.
+Xem log bằng `tail -f outputs/launch_logs/qwen25_14b.log`. Nếu chạy lại các
+lệnh trên, log launcher bị ghi mới; console log trong từng run vẫn riêng.
+Để tiếp tục một run bị gián đoạn, chạy đúng wrapper với GPU tương ứng và
+`RESUME=auto`. Cả 6 model đều có wrapper GRPO Reflex và baseline, ví dụ
+`DATASET=simplelr bash train_qwen25_14b.sh` và
+`DATASET=simplelr bash train_qwen25_14b_dflash.sh`.
+
 ```bash
 bash pretrain_qwen3_4b.sh
 bash pretrain_qwen3_8b.sh
@@ -142,7 +195,7 @@ Thông số pretrain chính:
 | `PRETRAIN_DATASET_PATH` | file ShareGPT đã nêu |
 | `PRETRAIN_EPOCHS`, `PRETRAIN_LR` | 5, 5e-5 |
 | `PRETRAIN_BATCH_SIZE` | 1 trên mỗi GPU |
-| `PRETRAIN_ACCUMULATION_STEPS` | 8 cho 4B/1.7B, 16 cho 8B |
+| `PRETRAIN_ACCUMULATION_STEPS` | Qwen3: 8 cho 4B/1.7B, 16 cho 8B; Qwen2.5: 16/8/4/2 cho 1.5B/3B/7B/14B |
 | `PRETRAIN_MAX_LENGTH` | 2048 |
 | `PRETRAIN_MAX_SAMPLES`, `PRETRAIN_MAX_STEPS` | 0 = không giới hạn |
 | `PRETRAIN_SAVE_INTERVAL` | 500 optimizer steps |
@@ -415,8 +468,8 @@ bash pretrain_qwen3_8b.sh
 Validation kiểm tra tokenizer vocabulary theo hash semantic của tokenizer
 Qwen3-8B đã pin, hidden/head dimensions, 36 target layers, 5 draft layers,
 auxiliary layer IDs, MASK row, block 16 và toàn bộ shapes weights. Không ghép
-checkpoint 8B này với Qwen2.5 hay target 4B. Qwen2.5 có QKV bias nên không
-được quảng cáo hỗ trợ trong bản tích hợp này.
+checkpoint 8B này với Qwen2.5 hay target 4B. Qwen2.5 cần drafter pretrain
+riêng bằng wrapper tương ứng ở mục 3; không dùng checkpoint z-lab của Qwen3.
 
 ## Benchmark cuối và cấu hình B200 được đề nghị
 

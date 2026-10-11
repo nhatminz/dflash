@@ -9,7 +9,10 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 
 
-@pytest.mark.parametrize("model", ["qwen3_1p7b", "qwen3_4b", "qwen3_8b"])
+@pytest.mark.parametrize(
+    "model",
+    ["qwen25_1p5b", "qwen25_3b", "qwen25_7b", "qwen25_14b", "qwen3_1p7b", "qwen3_4b", "qwen3_8b"],
+)
 @pytest.mark.parametrize("method", ["dflash", "dflash_reflex"])
 def test_dry_run_without_models_or_cuda(model, method, tmp_path):
     wrapper = ROOT / f"train_{model}{'_dflash' if method == 'dflash' else ''}.sh"

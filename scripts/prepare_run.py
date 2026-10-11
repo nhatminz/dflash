@@ -268,7 +268,12 @@ def main():
         return
     if min(env("LOG_INTERVAL", int), env("ROLLOUT_LOG_FLUSH_INTERVAL", int)) < 1:
         raise ValueError("logging intervals must be positive")
-    from dflash_reflex.model_contract import draft_config, fingerprint, validate_checkpoint
+    from dflash_reflex.model_contract import (
+        draft_config,
+        fingerprint,
+        validate_checkpoint,
+        validate_mask_token,
+    )
 
     fingerprint(env("MODEL"))
     target_config = json.loads((Path(env("MODEL")) / "config.json").read_text())
@@ -278,6 +283,7 @@ def main():
         num_layers=env("DFLASH_LAYERS", int),
         mask_token_id=env("DFLASH_MASK_TOKEN_ID", int),
     )
+    validate_mask_token(env("MODEL"), env("DFLASH_MASK_TOKEN_ID", int))
     if not any(Path(env("MODEL")).glob("*.safetensors")):
         raise FileNotFoundError("target directory has no safetensors weights")
     if a.kind == "pretrain" and env("PRETRAIN_WARM_START"):

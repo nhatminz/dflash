@@ -82,9 +82,18 @@ DATASET=simplelr bash train_qwen3_4b_dflash.sh
 RESUME=auto DATASET=simplelr bash train_qwen3_4b.sh
 ```
 
-Qwen3-4B, Qwen3-8B and Qwen3-1.7B have model-specific wrappers. Model/data
-paths are checked locally; nothing downloads a substitute model or dataset.
-Qwen2.5 is rejected because this DFlash implementation assumes bias-free QKV.
+The SpecNaacl experiment set has six model-specific wrapper families:
+Qwen2.5-1.5B/3B/7B/14B-Instruct and Qwen3-1.7B/4B. Each has
+`pretrain_<key>.sh`, `train_<key>.sh` (Reflex), and `train_<key>_dflash.sh`
+(baseline). The existing Qwen3-8B wrappers remain optional. Model/data paths
+are checked locally; nothing downloads a substitute model or dataset.
+Qwen2.5 retains its original biased target attention. Its headless DFlash
+drafter is independently initialized with bias-free Qwen3-style attention,
+the target's hidden/head/GQA dimensions, and shared target embedding/LM head.
+MASK 151669 must be an unused embedding row in the actual local tokenizer.
+The new family has tiny forward/backward/export tests; full B200 runs remain
+unverified. See [six-model commands](huongdanchay.md#chạy-đồng-thời-6-model)
+and [the support report](validation/qwen25_support_report.md).
 An external z-lab Qwen3-8B-b16 checkpoint is accepted only after architecture,
 tokenizer vocabulary, MASK row, block-size and safetensors-header validation.
 The official MASK is unused embedding row **151669**, not `<|fim_pad|>`.
@@ -126,7 +135,9 @@ dflash/
   README.md ENVIRONMENT.md IMPLEMENTATION_REPORT.md huongdanchay.md
   versions.lock SOURCE_MANIFEST.json requirements.txt pyproject.toml
   pretrain_qwen3_{1p7b,4b,8b}.sh
+  pretrain_qwen25_{1p5b,3b,7b,14b}.sh
   train_qwen3_{1p7b,4b,8b}{,_dflash}.sh
+  train_qwen25_{1p5b,3b,7b,14b}{,_dflash}.sh
   configs/{_shared,qwen3_1p7b,qwen3_4b,qwen3_8b}/
   dflash_reflex/
     pretrain.py train.py nemo_data.py data.py rewards.py model_contract.py

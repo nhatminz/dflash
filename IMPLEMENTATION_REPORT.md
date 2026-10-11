@@ -46,8 +46,10 @@ dflash/
 ├── README.md ENVIRONMENT.md IMPLEMENTATION_REPORT.md huongdanchay.md
 ├── versions.lock SOURCE_MANIFEST.json requirements.txt pyproject.toml
 ├── pretrain_qwen3_{1p7b,4b,8b}.sh
+├── pretrain_qwen25_{1p5b,3b,7b,14b}.sh
 ├── train_qwen3_{1p7b,4b,8b}.sh
 ├── train_qwen3_{1p7b,4b,8b}_dflash.sh
+├── train_qwen25_{1p5b,3b,7b,14b}{,_dflash}.sh
 ├── configs/
 │   ├── _shared/b200_common.env
 │   └── qwen3_{1p7b,4b,8b}/b200.env
@@ -331,8 +333,11 @@ Launcher dùng latest compatible pretraining checkpoint nếu không override
 `DRAFT_CHECKPOINT`; thiếu model/data/checkpoint thì fail, không tải thay thế.
 Hai method dùng cùng NVIDIA co-training và sampling. Hướng dẫn smoke GRPO,
 overrides, Qwen3-8B, plotting và fair comparison nằm trong
-[huongdanchay.md](huongdanchay.md). Qwen2.5 không được quảng cáo hỗ trợ do
-QKV bias không phù hợp với architecture được tích hợp. External 8B-b16
+[huongdanchay.md](huongdanchay.md). Bộ 6 model gồm Qwen2.5-1.5B/3B/7B/14B
+và Qwen3-1.7B/4B, bỏ Llama. Qwen2.5 giữ target có QKV bias, dùng drafter
+Qwen3-style không bias được khởi tạo độc lập với đúng geometry và shared
+embedding/LM head. Có kiểm thử tiny forward/backward/export nhưng chưa có
+full B200 training; xem [báo cáo hỗ trợ](validation/qwen25_support_report.md). External 8B-b16
 checkpoint cần đúng target/tokenizer/aux layers/MASK/weights; MASK là unused
 row 151669, không phải `<|fim_pad|>`.
 
