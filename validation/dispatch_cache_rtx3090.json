@@ -1,0 +1,42 @@
+{
+  "NVIDIA GeForce RTX 3090|16|128|4096|8|16|torch.bfloat16": [
+    {
+      "density": 0.02,
+      "mode": "dense",
+      "implementation": "fused",
+      "proposal_ms": 0.11223039627075196
+    },
+    {
+      "density": 0.2,
+      "mode": "dense",
+      "implementation": "fused",
+      "proposal_ms": 0.10753599405288697
+    },
+    {
+      "density": 1.0,
+      "mode": "dense",
+      "implementation": "fused",
+      "proposal_ms": 0.10700800418853759
+    }
+  ],
+  "NVIDIA GeForce RTX 3090|30|2560|151936|8|16|torch.bfloat16": [
+    {
+      "density": 0.02,
+      "mode": "sparse",
+      "implementation": "fused",
+      "proposal_ms": 0.4717120170593262
+    },
+    {
+      "density": 0.2,
+      "mode": "sparse",
+      "implementation": "fused",
+      "proposal_ms": 0.48824319839477537
+    },
+    {
+      "density": 1.0,
+      "mode": "dense",
+      "implementation": "gemm",
+      "proposal_ms": 0.5289984226226807
+    }
+  ]
+}

@@ -1,0 +1,125 @@
+diff --git a/nemo_rl/algorithms/grpo.py b/nemo_rl/algorithms/grpo.py
+index 66ec0b5..d925a98 100644
+--- a/nemo_rl/algorithms/grpo.py
++++ b/nemo_rl/algorithms/grpo.py
+@@ -3002,7 +3002,8 @@ def grpo_train(
+         dynamic_sampling_num_gen_batches = 0
+ 
+         # Run grpo/dapo training loop (single-turn)
+-        for batch in wrapped_dataloader:
++        from dflash_reflex.nemo_bridge import tracked_iterations
++        for batch in tracked_iterations(wrapped_dataloader, current_epoch, total_steps):
+             refit_metrics: dict[str, float] = {}
+             # A central place to store logging data that won't be deleted until the loop ends
+             metrics_logging_data = dict()
+@@ -3875,10 +3876,8 @@ def grpo_train(
+                         # with sync save it renames immediately. Finalization is
+                         # flushed at the next save (finalize_pending) or on exit
+                         # (shutdown).
+-                        checkpointer.begin_finalization(
+-                            checkpoint_path,
+-                            wait_fn=policy.finalize_async_save,
+-                        )
++                        from dflash_reflex.nemo_bridge import defer_driver_checkpoint
++                        defer_driver_checkpoint(checkpointer, checkpoint_path, policy.finalize_async_save)
+ 
+                         # Record last-successful-checkpoint time/step for external
+                         # monitoring (parity with async_grpo_train; see
+@@ -4018,6 +4017,8 @@ def grpo_train(
+                 step_finished=True,
+             )
+ 
++            from dflash_reflex.nemo_bridge import record_iteration
++            record_iteration(total_steps + 1, timing_metrics, metrics)
+             # Reset the batch and set dynamic_sampling_num_gen_batches to 0
+             batch_cache = None
+             dynamic_sampling_num_gen_batches = 0
+@@ -5760,10 +5761,8 @@ def async_grpo_train(
+ 
+                         # Defer the directory rename until any async write
+                         # completes; flushed at the next save or on training exit.
+-                        checkpointer.begin_finalization(
+-                            checkpoint_path,
+-                            wait_fn=policy.finalize_async_save,
+-                        )
++                        from dflash_reflex.nemo_bridge import defer_driver_checkpoint
++                        defer_driver_checkpoint(checkpointer, checkpoint_path, policy.finalize_async_save)
+ 
+                         # Record last-successful-checkpoint time/step for external
+                         # monitoring (see _write_latest_checkpoint_status).
+diff --git a/nemo_rl/environments/math_environment.py b/nemo_rl/environments/math_environment.py
+index e453f3b..8551a5a 100644
+--- a/nemo_rl/environments/math_environment.py
++++ b/nemo_rl/environments/math_environment.py
+@@ -125,7 +125,11 @@ class HFVerifyWorker:
+             try:
+                 with _mute_output():
+                     math_verify_impl = kwargs.get("math_verify_impl", "hf_math_verify")
+-                    if kwargs.get("math_verify_impl") == "dapo_math_verify":
++                    if kwargs.get("math_verify_impl") == "specnaacl":
++                        from dflash_reflex.rewards import accuracy_reward_func, format_reward_func
++                        ret_score = accuracy_reward_func([response], [ground_truth])[0] + 0.2 * format_reward_func([response])[0]
++                        extracted_answer = None
++                    elif kwargs.get("math_verify_impl") == "dapo_math_verify":
+                         # This compute_score is from the DAPO Math Verifier from Verl
+                         reward_dict = dapo_math_verify(response, ground_truth)
+                         ret_score = reward_dict["score"]
+diff --git a/nemo_rl/models/generation/vllm/vllm_worker.py b/nemo_rl/models/generation/vllm/vllm_worker.py
+index ba9ad5f..fe13b9e 100644
+--- a/nemo_rl/models/generation/vllm/vllm_worker.py
++++ b/nemo_rl/models/generation/vllm/vllm_worker.py
+@@ -1043,7 +1043,8 @@ class VllmGenerationWorkerImpl(VllmCheckpointEngineRpcMixin, BaseVllmGenerationW
+         # Convert inputs to vLLM format and generate outputs.
+         prompts = format_prompt_for_vllm_generation(data)
+         use_tqdm = self.cfg["vllm_cfg"].get("use_tqdm", True)
+-        outputs = self.llm.generate(prompts, sampling_params, use_tqdm=use_tqdm)
++        from dflash_reflex.nemo_bridge import generate_cohort
++        outputs = generate_cohort(self.llm, prompts, sampling_params, use_tqdm=use_tqdm)
+ 
+         # Process the outputs - but preserve the original input padding structure
+         output_ids_list = []
+diff --git a/nemo_rl/models/policy/workers/megatron_policy_worker.py b/nemo_rl/models/policy/workers/megatron_policy_worker.py
+index 5fe93b0..ae17e18 100644
+--- a/nemo_rl/models/policy/workers/megatron_policy_worker.py
++++ b/nemo_rl/models/policy/workers/megatron_policy_worker.py
+@@ -589,6 +589,8 @@ class MegatronPolicyWorkerImpl(
+         self.checkpointing_context = model_and_optimizer_state.checkpointing_context
+         param_sync_func = model_and_optimizer_state.param_sync_func
+         self.draft_model = model_and_optimizer_state.draft_model
++        from dflash_reflex.nemo_bridge import initialize_trainer
++        self.reflex_trainer = initialize_trainer(self, pretrained_path, init_optimizer)
+         self._colocated_reshard_plan = model_and_optimizer_state.colocated_reshard_plan
+         log_gpu_memory_diagnostics(
+             label="after_model_setup", worker_type="MegatronPolicyWorker"
+@@ -698,6 +700,8 @@ class MegatronPolicyWorkerImpl(
+ 
+         self._init_inference_engine_state()
+         self._setup_colocated_cuda_graph_managers()
++        from dflash_reflex.nemo_bridge import restore_trainer_rng
++        restore_trainer_rng(self, pretrained_path, init_optimizer)
+ 
+         log_gpu_memory_diagnostics(
+             label="init_complete", worker_type="MegatronPolicyWorker"
+@@ -1056,9 +1060,13 @@ class MegatronPolicyWorkerImpl(
+ 
+                 # Update parameters.
+                 if not eval_mode:
++                    from dflash_reflex.nemo_bridge import before_optimizer_step
++                    before_optimizer_step(self)
+                     update_successful, grad_norm, num_zeros_in_grad = (
+                         self.optimizer.step()
+                     )
++                    from dflash_reflex.nemo_bridge import after_optimizer_step
++                    after_optimizer_step(self, update_successful)
+                     # Megatron-LM PR #4116 replaced the optimizer.mtp_grad_norm attribute
+                     # with a per-group dict populated during gradient clipping. Value is
+                     # None when clip_grad == 0 or this rank owns no MTP-tagged params
+@@ -3721,6 +3729,8 @@ class MegatronPolicyWorkerImpl(
+                 "Megatron core state or model is not initialized. Cannot save checkpoint."
+             )
+ 
++        from dflash_reflex.nemo_bridge import save_trainer
++        save_trainer(self, weights_path)
+         original_save_path = self.mcore_state.cfg.checkpoint.save
+         is_async = self.mcore_state.cfg.checkpoint.async_save
+         if is_async and self._requires_nvrx_cuda_cache_release():

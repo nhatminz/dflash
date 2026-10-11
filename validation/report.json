@@ -1,0 +1,143 @@
+{
+  "created_utc": "2026-10-10T21:23:38.953765+00:00",
+  "status": "bounded CPU/CUDA checks passed; full production runtime not qualified",
+  "environment": {
+    "python": "3.12.2",
+    "torch": "2.4.1",
+    "cuda": "12.1",
+    "triton": "3.0.0",
+    "transformers": "4.57.1",
+    "gpu": "NVIDIA GeForce RTX 3090",
+    "capability": [
+      8,
+      6
+    ],
+    "bf16": true,
+    "driver": "555.42.06"
+  },
+  "tests": {
+    "tests": 46,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "passed": 46,
+    "duration_s": 12.402,
+    "by_module": {
+      "tests.test_cuda": 5,
+      "tests.test_dflash": 5,
+      "tests.test_distributed": 1,
+      "tests.test_launchers": 8,
+      "tests.test_logging": 4,
+      "tests.test_patches": 1,
+      "tests.test_reflex": 4,
+      "tests.test_resume": 4,
+      "tests.test_runtime": 3,
+      "tests.test_sampling": 4,
+      "tests.test_tools": 2,
+      "tests.test_training": 5
+    }
+  },
+  "warnings": {
+    "count": 3,
+    "causes": [
+      "protobuf metaclass deprecations (2)",
+      "system SciPy/isolated NumPy version-range mismatch (1)"
+    ]
+  },
+  "static_checks": {
+    "bash_syntax": {
+      "status": "passed",
+      "files": 13
+    },
+    "python_ast": {
+      "status": "passed",
+      "files": 40
+    },
+    "ruff_lint_and_format": "passed",
+    "pretrain_dry_runs": {
+      "status": "passed",
+      "models": 3
+    }
+  },
+  "source_shas": {
+    "nemo-rl": "c18e462adf34739951b3d21773f436eaee324b31",
+    "vllm": "752a3a504485790a2e8491cacbb35c137339ad34",
+    "original-dflash": "07ebd93db9f472af339b644bb70221ad8428328a"
+  },
+  "specnaacl_unchanged": true,
+  "specnaacl_files_audited": 163,
+  "patches": {
+    "nemo-rl": {
+      "sha256": "29ee62c78cb4dd7fed702d3962e839f4bdb6343161ac75d3464a115ccbff5a78",
+      "files": [
+        "nemo_rl/algorithms/grpo.py",
+        "nemo_rl/environments/math_environment.py",
+        "nemo_rl/models/generation/vllm/vllm_worker.py",
+        "nemo_rl/models/policy/workers/megatron_policy_worker.py"
+      ]
+    },
+    "vllm": {
+      "sha256": "c9c17422ac8528a3bf646d416d5088204232a344496ee6edef3d1f3b92a285b7",
+      "files": [
+        "vllm/v1/sample/rejection_sampler.py",
+        "vllm/v1/spec_decode/llm_base_proposer.py",
+        "vllm/v1/worker/gpu_model_runner.py"
+      ]
+    }
+  },
+  "microbenchmark": "qwen3_4b_geometry_rtx3090.json",
+  "not_run": [
+    {
+      "component": "CUDA-13 locked dependency installation and import probes",
+      "locations": [
+        "scripts/setup_environment.sh",
+        "scripts/validate_environment.py"
+      ],
+      "reason": "host driver 555.42.06/CUDA 12; no pinned MCore/FA/TE/vLLM runtime"
+    },
+    {
+      "component": "NVIDIA Megatron ShareGPT pretraining and full save/resume",
+      "locations": [
+        "dflash_reflex/pretrain.py"
+      ],
+      "reason": "no production runtime or required local target/ShareGPT checkpoint/data"
+    },
+    {
+      "component": "GRPO target/draft optimizer/refit and full resume",
+      "locations": [
+        "dflash_reflex/train.py",
+        "dflash_reflex/nemo_bridge.py"
+      ],
+      "reason": "no production runtime or required local models/math datasets"
+    },
+    {
+      "component": "live vLLM scheduler/KV correctness",
+      "locations": [
+        "dflash_reflex/vllm_runtime.py"
+      ],
+      "reason": "only real rejection kernels and synthetic runtime request traces executed; no live engine"
+    },
+    {
+      "component": "multi-GPU training",
+      "locations": [
+        "dflash_reflex/pretrain.py",
+        "scripts/prepare_run.py"
+      ],
+      "reason": "single physical GPU; GRPO deliberately restricts one owner; two-rank CPU aggregation passed"
+    },
+    {
+      "component": "B200 calibration/end-to-end speedup",
+      "locations": [
+        "scripts/benchmark_rollout.py"
+      ],
+      "reason": "RTX 3090 available, B200 absent; microbenchmarks exclude transformer/GRPO"
+    }
+  ],
+  "commands": [
+    ".venv-test/bin/python -m pytest tests -q --junitxml=validation/pytest.xml",
+    ".venv-test/bin/ruff check dflash_reflex scripts tests",
+    ".venv-test/bin/ruff format --check dflash_reflex scripts tests",
+    "python3 scripts/validate_environment.py --output validation/source_audit.json",
+    "PYTHONPATH=. .venv-test/bin/python scripts/benchmark_rollout.py --mode micro --rows 30 --hidden 2560 --vocab 151936 --rank 8 --topk 16 --repeats 5 --output validation/qwen3_4b_geometry_rtx3090.json --cache validation/dispatch_cache_rtx3090.json"
+  ]
+}

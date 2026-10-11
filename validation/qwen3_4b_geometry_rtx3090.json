@@ -1,0 +1,69 @@
+{
+  "kind": "CUDA microbenchmark, no transformer forward or GRPO",
+  "gpu": "NVIDIA GeForce RTX 3090",
+  "torch": "2.4.1",
+  "cuda": "12.1",
+  "rows": 30,
+  "hidden": 2560,
+  "vocab": 151936,
+  "rank": 8,
+  "topk": 16,
+  "repeats": 5,
+  "proposal": [
+    {
+      "density": 0.02,
+      "mode": "sparse",
+      "implementation": "fused",
+      "proposal_ms": 0.4717120170593262
+    },
+    {
+      "density": 0.02,
+      "mode": "dense",
+      "implementation": "fused",
+      "proposal_ms": 0.530022382736206
+    },
+    {
+      "density": 0.02,
+      "mode": "dense",
+      "implementation": "gemm",
+      "proposal_ms": 0.5292031764984131
+    },
+    {
+      "density": 0.2,
+      "mode": "sparse",
+      "implementation": "fused",
+      "proposal_ms": 0.48824319839477537
+    },
+    {
+      "density": 0.2,
+      "mode": "dense",
+      "implementation": "fused",
+      "proposal_ms": 0.5297855854034423
+    },
+    {
+      "density": 0.2,
+      "mode": "dense",
+      "implementation": "gemm",
+      "proposal_ms": 0.530022382736206
+    },
+    {
+      "density": 1.0,
+      "mode": "sparse",
+      "implementation": "fused",
+      "proposal_ms": 0.5304319858551025
+    },
+    {
+      "density": 1.0,
+      "mode": "dense",
+      "implementation": "fused",
+      "proposal_ms": 0.530022382736206
+    },
+    {
+      "density": 1.0,
+      "mode": "dense",
+      "implementation": "gemm",
+      "proposal_ms": 0.5289984226226807
+    }
+  ],
+  "feedback_ms": 0.3222463965415955
+}

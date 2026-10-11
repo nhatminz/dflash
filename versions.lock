@@ -1,0 +1,26 @@
+{
+  "nemo-rl": {
+    "url": "https://github.com/MarkXCloud/RL",
+    "sha": "c18e462adf34739951b3d21773f436eaee324b31"
+  },
+  "vllm": {
+    "url": "https://github.com/vllm-project/vllm",
+    "sha": "752a3a504485790a2e8491cacbb35c137339ad34"
+  },
+  "original-dflash": {
+    "url": "https://github.com/z-lab/dflash",
+    "sha": "07ebd93db9f472af339b644bb70221ad8428328a"
+  },
+  "runtime": {
+    "flash-attn": "2.8.1+cu13torch2.10cxx11abitrue",
+    "ray": "2.56.1",
+    "torch": "2.11.0+cu130",
+    "transformer-engine": "2.15.0+42b8400",
+    "transformers": "5.12.1",
+    "triton": "3.6.0"
+  },
+  "python": "3.13",
+  "cuda": "13.0",
+  "vllm_version": "0.25.1",
+  "megatron_bridge_sha": "b11414c71b15e54d333eb49346ed199f20fa9021"
+}

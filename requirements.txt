@@ -1,0 +1,3 @@
+# Supplemental tools only. Install runtime using the vendored NeMo uv.lock,
+# separately for base, mcore and vllm; scripts/setup_environment.sh does this.
+pytest==9.1.1
