@@ -431,8 +431,20 @@ def test_cuda_header_supplement_uses_hashes_and_local_bundle(
     assert kwargs["env"]["PIP_INDEX_URL"] == "https://internal.example/simple"
 
 
+@pytest.mark.parametrize(
+    "backend,boundary,expected_sources,needs_registry",
+    [
+        (
+            "mcore",
+            "transformer-engine",
+            ["transformer-engine", "Megatron-LM", "Megatron-Bridge", "deep-ep", "deep-gemm"],
+            True,
+        ),
+        ("vllm", "deep-gemm", ["deep-gemm"], False),
+    ],
+)
 def test_resume_main_does_not_repeat_earlier_installs_and_keeps_runtime_check(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, backend, boundary, expected_sources, needs_registry
 ):
     module = load_script("install_local_packages", monkeypatch)
     monkeypatch.setattr(module, "ROOT", tmp_path)
@@ -455,8 +467,10 @@ def test_resume_main_does_not_repeat_earlier_installs_and_keeps_runtime_check(
     monkeypatch.setattr(module, "run_logged", lambda command, *a, **kw: calls.append(list(command)))
     monkeypatch.setattr(module, "cuda_build_environment", lambda env, site: env)
     monkeypatch.setattr(module, "deep_ep_build_environment", lambda env, site: env)
+    monkeypatch.setattr(module, "deep_gemm_build_environment", lambda env, site: env)
     monkeypatch.setattr(module, "check_cuda_toolchain", lambda *a: None)
     monkeypatch.setattr(module, "check_deep_ep_toolchain", lambda *a: None)
+    monkeypatch.setattr(module, "check_deep_gemm_link", lambda *a: None)
     monkeypatch.setattr(module, "check_transformer_engine_headers", lambda *a: None)
     monkeypatch.setattr(
         sys,
@@ -464,27 +478,22 @@ def test_resume_main_does_not_repeat_earlier_installs_and_keeps_runtime_check(
         [
             "install_local_packages.py",
             "--backend",
-            "mcore",
+            backend,
             "--resume-from-source",
-            "transformer-engine",
+            boundary,
         ],
     )
     module.main()
     source_calls = [c for c in calls if "--verbose" in c]
-    assert [Path(c[-1]).name for c in source_calls] == [
-        "transformer-engine",
-        "Megatron-LM",
-        "Megatron-Bridge",
-        "deep-ep",
-        "deep-gemm",
-    ]
+    assert [Path(c[-1]).name for c in source_calls] == expected_sources
     registry = [
         c
         for c in calls
         if c[:3] == ["uv", "pip", "install"]
         and any(p.endswith((".registry.txt", ".bootstrap.txt")) or p == "wheel>=0.46.2" for p in c)
     ]
-    assert registry and all(".venv-local-vllm/bin/python" in c[4] for c in registry)
+    assert bool(registry) == needs_registry
+    assert all(".venv-local-vllm/bin/python" in c[4] for c in registry)
     assert any("--require-runtime" in c for c in calls)
     assert any(str(tmp_path / "scripts/patch_upstream.py") in c for c in calls)
     activation = (destination / "activate.sh").read_text()

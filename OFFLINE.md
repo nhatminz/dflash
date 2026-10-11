@@ -144,6 +144,35 @@ fi
 
 ### Source build CUDA 13 và log lỗi Ninja
 
+Lỗi DeepGEMM `/usr/bin/ld: cannot find -lnvrtc` là lỗi link sau khi C++ đã
+compile xong. Setup.py ở commit đã pin link `cudart` và `nvrtc` nhưng chỉ thêm
+`${CUDA_HOME}/lib64`; wheel CUDA 13 của backend đặt thư viện ở
+`nvidia/cu13/lib` và chỉ mang SONAME `.so.13`. Installer tạo symlink tương đối
+`libnvrtc.so`/`libcudart.so`, thêm library search path và RUNPATH riêng cho
+DeepGEMM. Không đổi CUDA_HOME, pin dependency hay source DeepGEMM; không tải
+thêm NVRTC nếu các wheel trong registry đã cài đầy đủ. Probe kiểm tra link
+`-lnvrtc -lcudart`, nạp bằng process mới và xác nhận NVRTC 13.0 trước build.
+
+Nếu lỗi đang ở backend vLLM/DeepGEMM, chép ZIP nhỏ mới nhất vào `library/`:
+
+```bash
+cd /workspace/storage-shared/nlp/minhpn19/dflash
+unzip -oq library/dflash_b200_deep_gemm_nvrtc_fix.zip
+export CUDA_HOME="${CUDA_HOME:-/usr/local/cuda}"
+export PATH="$CUDA_HOME/bin:$PATH"
+python3 scripts/install_local_packages.py --backend vllm \
+  --resume-from-source deep-gemm \
+  && source offline_packages/activate.sh
+```
+
+Lệnh này bỏ qua base, MCore/TE và những source vLLM trước DeepGEMM; hoàn tất
+setup/patch/runtime check. Không chạy lại full setup sau đó. ZIP chứa cả hai
+wheel header của bản vá trước nhưng không cần chuyển lại bundle lớn. Kiểm
+chứng link/load với wheel NVIDIA thật và compile PTX SM100:
+`validation/deep_gemm_nvrtc_real_probe.json`; probe PTX preload builtins như
+Torch 2.11, không chạy kernel GPU. Toàn bộ wheel DeepGEMM và runtime B200 vẫn
+cần được kiểm tra trên máy đích.
+
 Lỗi Transformer Engine tại `util/cuda_nvml.h: fatal error: nvml.h` cần
 `nvidia-nvml-dev==13.0.87`. Gói NVIDIA này chỉ chứa header C/C++, không thay
 driver hay `libnvidia-ml.so.1`; `nvidia-ml-py`/`pynvml` không cung cấp header đó.

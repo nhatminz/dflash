@@ -1,0 +1,33 @@
+{
+  "diagnosis": "DeepGEMM C++ compile completed; host link fails with cannot find -lnvrtc because setup searches CUDA_HOME/lib64 while CUDA-13 wheels install versioned libraries in backend site-packages/nvidia/cu13/lib.",
+  "deep_gemm_commit": "67fc64863d43521080bf2005e6528d0fceee9510",
+  "dependency_pins_changed": false,
+  "versions_lock_sha256": "316e522bf4578a5856bd0cab8d5a158aa9a2579359b2339fa30333baad783b4d",
+  "fix": [
+    "Scope CUDA wheel library directory, LIBRARY_PATH and host LDFLAGS/RUNPATH to DeepGEMM.",
+    "Create relative libnvrtc.so/libcudart.so aliases to existing locked .so.13 files; reject conflicting aliases and missing libraries/builtins.",
+    "Probe native link/load and NVRTC version before DeepGEMM build; import installed DeepGEMM in a fresh backend process afterwards."
+  ],
+  "resume_command": "python3 scripts/install_local_packages.py --backend vllm --resume-from-source deep-gemm",
+  "resume_skips": [
+    "base",
+    "mcore and Transformer Engine",
+    "vllm registry and sources preceding deep-gemm"
+  ],
+  "test_results": {
+    "tests": "43",
+    "errors": "0",
+    "failures": "0",
+    "skipped": "0"
+  },
+  "meaningful_checks": [
+    "Actual setuptools C++ extension honors LDFLAGS and loads after moving its backend directory.",
+    "Resume vLLM from DeepGEMM skips earlier work and retains final patch/runtime qualification.",
+    "Locked NVRTC 13.0.88 and CUDART 13.0.96 wheels pass native link/load and SM100 NVRTC compilation."
+  ],
+  "real_artifact_validation": "validation/deep_gemm_nvrtc_real_probe.json",
+  "limits": [
+    "Full DeepGEMM Torch 2.11 extension and B200 runtime have not been executed on this host.",
+    "Standalone NVRTC compile probe preloads builtins following locked Torch 2.11; no GPU kernel is executed."
+  ]
+}

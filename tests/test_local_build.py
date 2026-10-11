@@ -367,3 +367,128 @@ def test_ninja_resume_after_header_fix_keeps_completed_objects(tmp_path):
     assert str(source / "missing.cpp") in resumed.stdout
     assert str(source / "completed.cpp") not in resumed.stdout
     assert completed.read_bytes() == old_bytes and completed.stat().st_mtime_ns == old_time
+
+
+def deep_gemm_fixture(tmp_path):
+    site = tmp_path / "site"
+    directory = site / "nvidia/cu13/lib"
+    directory.mkdir(parents=True)
+    include = site / "nvidia/cu13/include"
+    include.mkdir()
+    (include / "nvrtc.h").write_text(
+        '#define NVRTC_SUCCESS 0\nextern "C" int nvrtcVersion(int*,int*);\n'
+    )
+    for name, body in (
+        ("nvrtc", "int nvrtcVersion(int* a,int* b) {*a=13;*b=0;return 0;}"),
+        ("cudart", "int cudaRuntimeGetVersion(int* v) {*v=13000;return 0;}"),
+    ):
+        subprocess.run(
+            [
+                shutil.which("gcc"),
+                "-shared",
+                "-fPIC",
+                "-x",
+                "c",
+                "-",
+                f"-Wl,-soname,lib{name}.so.13",
+                "-o",
+                str(directory / f"lib{name}.so.13"),
+            ],
+            input=body,
+            text=True,
+            check=True,
+        )
+    (directory / "libnvrtc-builtins.so.13.0").touch()
+    return site, directory, include
+
+
+def test_deep_gemm_nvrtc_link_fresh_load_and_relocation(tmp_path, module):
+    site, directory, include = deep_gemm_fixture(tmp_path)
+    env = dict(
+        os.environ, CXX=shutil.which("g++"), CPATH=str(include), LDFLAGS="-Wl,--no-undefined"
+    )
+    env.pop("LIBRARY_PATH", None)
+    failed = subprocess.run(
+        [
+            env["CXX"],
+            "-shared",
+            "-x",
+            "c++",
+            "-",
+            "-L" + str(directory),
+            "-lnvrtc",
+            "-o",
+            str(tmp_path / "missing.so"),
+        ],
+        input="int f(){return 0;}",
+        text=True,
+        env=env,
+        capture_output=True,
+    )
+    assert failed.returncode and "cannot find -lnvrtc" in failed.stderr
+    fixed = module.deep_gemm_build_environment(env, site)
+    assert module.deep_gemm_build_environment(fixed, site) == fixed
+    assert "LIBRARY_PATH" not in env
+    for name in ("nvrtc", "cudart"):
+        assert os.readlink(directory / f"lib{name}.so") == f"lib{name}.so.13"
+    module.check_deep_gemm_link(sys.executable, fixed, tmp_path / "logs")
+    package = site / "deep_gemm"
+    package.mkdir()
+    # DeepGEMM uses setuptools' host extension linker. Exercise that actual
+    # path so a passing raw g++ probe cannot hide ignored LDFLAGS in packaging.
+    (tmp_path / "probe.cpp").write_text(
+        '#include <nvrtc.h>\nextern "C" int cudaRuntimeGetVersion(int*);\n'
+        'extern "C" int probe(){int a,b,v;nvrtcVersion(&a,&b);'
+        "cudaRuntimeGetVersion(&v);return a*100+b+v;}\n"
+    )
+    (tmp_path / "setup.py").write_text(
+        "from setuptools import setup, Extension\n"
+        "setup(name='dflash-nvrtc-link-probe', version='0.0.0', "
+        "ext_modules=[Extension('deep_gemm.probe', ['probe.cpp'], language='c++', "
+        "libraries=['nvrtc','cudart'])])\n"
+    )
+    subprocess.run(
+        [sys.executable, "setup.py", "build_ext", "--build-lib", str(site)],
+        cwd=tmp_path,
+        env=fixed,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    output_name = next(package.glob("probe*.so")).name
+    moved = tmp_path / "relocated-site"
+    site.rename(moved)
+    load_env = os.environ.copy()
+    load_env.pop("LD_LIBRARY_PATH", None)
+    subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import ctypes,sys; assert ctypes.CDLL(sys.argv[1]).probe()==14300",
+            str(moved / "deep_gemm" / output_name),
+        ],
+        env=load_env,
+        check=True,
+    )
+
+
+@pytest.mark.parametrize(
+    "missing", ["libnvrtc.so.13", "libcudart.so.13", "libnvrtc-builtins.so.13.0"]
+)
+def test_deep_gemm_missing_library_fails_before_build(tmp_path, module, missing):
+    site, directory, _ = deep_gemm_fixture(tmp_path)
+    (directory / missing).unlink()
+    with pytest.raises(RuntimeError, match="locked CUDA 13 library"):
+        module.deep_gemm_build_environment({}, site)
+    assert not (directory / "libnvrtc.so").exists()
+
+
+def test_deep_gemm_preserves_conflicting_alias_and_backend_isolation(tmp_path, module):
+    site, directory, _ = deep_gemm_fixture(tmp_path)
+    alias = directory / "libnvrtc.so"
+    alias.symlink_to("missing-library.so")
+    with pytest.raises(RuntimeError, match="Conflicting CUDA linker alias"):
+        module.deep_gemm_build_environment({}, site)
+    assert os.readlink(alias) == "missing-library.so"
+    with pytest.raises(RuntimeError, match="locked CUDA 13 library"):
+        module.deep_gemm_build_environment({}, tmp_path / "other-backend")

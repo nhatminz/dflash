@@ -150,6 +150,83 @@ def deep_ep_build_environment(env, site_packages):
     return result
 
 
+def deep_gemm_build_environment(env, site_packages):
+    """Link DeepGEMM against this backend's locked CUDA runtime/NVRTC wheels."""
+    result = env.copy()
+    directory = Path(site_packages) / "nvidia/cu13/lib"
+    libraries = [
+        directory / name
+        for name in ("libnvrtc.so.13", "libcudart.so.13", "libnvrtc-builtins.so.13.0")
+    ]
+    for library in libraries:
+        if not library.is_file():
+            raise RuntimeError(
+                f"DeepGEMM requires the backend's locked CUDA 13 library: {library}. "
+                "Restore nvidia-cuda-nvrtc==13.0.88 and nvidia-cuda-runtime==13.0.96 "
+                "from this backend's registry requirements."
+            )
+    for name in ("nvrtc", "cudart"):
+        library, alias = directory / f"lib{name}.so.13", directory / f"lib{name}.so"
+        if alias.is_symlink() or alias.exists():
+            if alias.resolve() != library.resolve():
+                raise RuntimeError(f"Conflicting CUDA linker alias: {alias}")
+        else:
+            alias.symlink_to(library.name)
+    previous = [p for p in env.get("LIBRARY_PATH", "").split(os.pathsep) if p]
+    result["LIBRARY_PATH"] = os.pathsep.join(dict.fromkeys([str(directory), *previous]))
+    # _C is installed under site-packages/deep_gemm, one level below the
+    # NVIDIA wheel namespace. Keep a relative RUNPATH as well as the build path.
+    flags = shlex.split(env.get("LDFLAGS", ""))
+    required = [
+        "-L" + str(directory),
+        "-Wl,-rpath," + str(directory),
+        "-Wl,-rpath,$ORIGIN/../nvidia/cu13/lib",
+    ]
+    result["LDFLAGS"] = shlex.join(flags + [f for f in required if f not in flags])
+    print(f"DeepGEMM CUDA runtime/NVRTC linker libraries: {directory}", flush=True)
+    return result
+
+
+def check_deep_gemm_link(python, env, log_dir):
+    """Test -lnvrtc/-lcudart and fresh-process loading before compiling DeepGEMM."""
+    log_dir = Path(log_dir)
+    log_dir.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="deep-gemm-probe-", dir=log_dir) as temporary:
+        temporary = Path(temporary)
+        source, output = temporary / "probe.cpp", temporary / "probe.so"
+        source.write_text(
+            "#include <nvrtc.h>\n"
+            'extern "C" int cudaRuntimeGetVersion(int*);\n'
+            'extern "C" auto cudart_api() { return &cudaRuntimeGetVersion; }\n'
+            'extern "C" int nvrtc_version() { int a=0,b=0; '
+            "return nvrtcVersion(&a,&b)==NVRTC_SUCCESS ? a*100+b : -1; }\n"
+        )
+        run_logged(
+            shlex.split(env["CXX"])
+            + ["-std=c++17", "-shared", "-fPIC", str(source)]
+            + shlex.split(env.get("LDFLAGS", ""))
+            + ["-Wl,--no-undefined", "-lnvrtc", "-lcudart", "-o", str(output)],
+            log_dir / "deep-gemm-link.log",
+            env=env,
+            cwd=temporary,
+        )
+        load_env = env.copy()
+        load_env.pop("LD_LIBRARY_PATH", None)
+        run_logged(
+            [
+                str(python),
+                "-c",
+                "import ctypes,sys; lib=ctypes.CDLL(sys.argv[1]); "
+                "version=lib.nvrtc_version(); assert version==1300, version; "
+                "print('DeepGEMM NVRTC link/load probe: CUDA 13.0')",
+                str(output),
+            ],
+            log_dir / "deep-gemm-load.log",
+            env=load_env,
+            cwd=temporary,
+        )
+
+
 def check_deep_ep_toolchain(python, env, log_dir):
     """Compile/link the missing profiler API and NVTX before the full DeepEP build."""
     log_dir = Path(log_dir)

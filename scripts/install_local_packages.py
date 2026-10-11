@@ -20,9 +20,11 @@ from pathlib import Path
 from local_build import (
     check_cuda_toolchain,
     check_deep_ep_toolchain,
+    check_deep_gemm_link,
     check_transformer_engine_headers,
     cuda_build_environment,
     deep_ep_build_environment,
+    deep_gemm_build_environment,
     pip_build_environment,
     run_logged,
 )
@@ -448,6 +450,9 @@ def main():
             if name == "deep-ep":
                 source_env = deep_ep_build_environment(source_env, site_packages)
                 check_deep_ep_toolchain(executable, source_env, logs)
+            if name == "deep-gemm":
+                source_env = deep_gemm_build_environment(source_env, site_packages)
+                check_deep_gemm_link(executable, source_env, logs)
             if name == "transformer-engine":
                 check_transformer_engine_headers(source_env, ROOT / shlex.split(line)[-1], logs)
             # pip streams the complete backend output with --verbose. uv's
@@ -468,6 +473,19 @@ def main():
                 cwd=ROOT,
                 env=pip_build_environment(source_env),
             )
+            if name == "deep-gemm":
+                # Link success alone does not prove Torch and the extension
+                # load together. Verify the installed package in a fresh actor.
+                run_logged(
+                    [
+                        str(executable),
+                        "-c",
+                        "import deep_gemm; print('DeepGEMM import:', deep_gemm.__version__)",
+                    ],
+                    logs / "deep-gemm-import.log",
+                    cwd=ROOT,
+                    env=source_env,
+                )
         if args.retry_source:
             print(f"Source retry succeeded; full setup still required. Logs: {logs}")
             return

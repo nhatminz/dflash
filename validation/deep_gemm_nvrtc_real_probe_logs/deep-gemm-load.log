@@ -1,0 +1,2 @@
+Command: /mnt/hdd/nhatminh/SpecDecode/dflash/.venv-test/bin/python -c 'import ctypes,sys; lib=ctypes.CDLL(sys.argv[1]); version=lib.nvrtc_version(); assert version==1300, version; print('"'"'DeepGEMM NVRTC link/load probe: CUDA 13.0'"'"')' /mnt/hdd/nhatminh/SpecDecode/dflash/validation/deep_gemm_nvrtc_real_probe_logs/deep-gemm-probe-c95djg0e/probe.so
+DeepGEMM NVRTC link/load probe: CUDA 13.0

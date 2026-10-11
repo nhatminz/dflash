@@ -1,0 +1,27 @@
+{
+  "artifacts": [
+    {
+      "name": "nvidia-cuda-nvrtc",
+      "version": "13.0.88",
+      "url": "https://files.pythonhosted.org/packages/c3/68/483a78f5e8f31b08fb1bb671559968c0ca3a065ac7acabfc7cee55214fd6/nvidia_cuda_nvrtc-13.0.88-py3-none-manylinux2010_x86_64.manylinux_2_12_x86_64.whl",
+      "sha256": "sha256:ad9b6d2ead2435f11cbb6868809d2adeeee302e9bb94bcf0539c7a40d80e8575",
+      "whole_wheel_sha256_verified": true
+    },
+    {
+      "name": "nvidia-cuda-runtime",
+      "version": "13.0.96",
+      "url": "https://files.pythonhosted.org/packages/2e/24/d1558f3b68b1d26e706813b1d10aa1d785e4698c425af8db8edc3dced472/nvidia_cuda_runtime-13.0.96-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl",
+      "sha256": "sha256:7f82250d7782aa23b6cfe765ecc7db554bd3c2870c43f3d1821f1d18aebf0548",
+      "whole_wheel_sha256_verified": true
+    }
+  ],
+  "missing_lnvrtc_reproduced": true,
+  "locked_cuda13_link_and_fresh_load_passed": true,
+  "nvrtc_builtins_sm100_ptx_compile_passed": true,
+  "nvrtc_builtins_preloaded_matching_torch211": true,
+  "ptx_bytes": 597,
+  "gpu_kernel_executed": false,
+  "full_deep_gemm_wheel_tested": false,
+  "B200_runtime_verified": false,
+  "temporary_probe_removed_after_completion": true
+}
