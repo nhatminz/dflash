@@ -92,6 +92,12 @@ Qwen2.5-1.5B/3B/7B/14B-Instruct and Qwen3-1.7B/4B. Each has
 `pretrain_<key>.sh`, `train_<key>.sh` (Reflex), and `train_<key>_dflash.sh`
 (baseline). The existing Qwen3-8B wrappers remain optional. Model/data paths
 are checked locally; nothing downloads a substitute model or dataset.
+Each wrapper fixes `MODEL_KEY` to the model named in its filename. `MODEL`
+remains an explicit path override; a stale exported `MODEL` takes precedence
+over the model config's default. Launchers reject recognized Qwen directory
+names belonging to another key before creating run files or checking CUDA.
+For custom directory names, the existing architecture/checkpoint validation
+still applies; the directory-name guard does not prove model size.
 Qwen2.5 retains its original biased target attention. Its headless DFlash
 drafter is independently initialized with bias-free Qwen3-style attention,
 the target's hidden/head/GQA dimensions, and shared target embedding/LM head.

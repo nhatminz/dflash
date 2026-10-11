@@ -268,7 +268,7 @@ loss, pretrained drafter và online co-training giống nhau giữa hai chế đ
 
 | Nhóm | Biến và mặc định |
 |---|---|
-| Model/device | `MODEL_KEY`, `MODEL`, `CUDA_VISIBLE_DEVICES=0`, `NPROC_PER_NODE=1` |
+| Model/device | Wrapper chọn `MODEL_KEY`; tùy chỉnh `MODEL`, `CUDA_VISIBLE_DEVICES=0`, `NPROC_PER_NODE=1` |
 | Batch | `BATCH_SIZE=8`, `RESPONSES_PER_PROMPT=8`, `ACCUMULATION_STEPS=4`, `TRAIN_MICRO_BATCH_SIZE=1` |
 | LR | `TARGET_LR=1e-6`, `DRAFT_LR=1e-4`, `DFLASH_DRAFT_LR=$DRAFT_LR` |
 | Generation | `GEN_MAX_LENGTH=2048`, `MAX_PROMPT_LENGTH=2048`, `TEMPERATURE=1`, `TOP_P=0.95` |

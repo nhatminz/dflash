@@ -1,0 +1,20 @@
+{
+  "problem": "An exported MODEL=/.../Qwen2.5-3B-Instruct overrides the 1.5B config default while its wrapper labels the run qwen25_1p5b. MODEL_KEY itself was also inheritable.",
+  "fix": [
+    "All 21 model wrappers fix MODEL_KEY to their filename.",
+    "Before run creation or runtime checks, common.sh rejects recognized Qwen model directory names belonging to another key.",
+    "MODEL path overrides and custom checkpoint folder names remain supported."
+  ],
+  "checks": {
+    "pytest": "48 passed",
+    "junit": "validation/model_launcher_identity_tests.xml",
+    "ruff": "passed",
+    "bash_syntax": "all 21 wrappers and common.sh passed",
+    "git_diff_check": "passed"
+  },
+  "limitations": [
+    "Directory-name checking cannot prove architecture or size for arbitrary renamed checkpoint folders; existing architecture/fingerprint checks still apply.",
+    "No full pretraining job was launched on B200 by this transfer host."
+  ],
+  "libraries_changed": false
+}

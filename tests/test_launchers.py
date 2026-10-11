@@ -9,6 +9,89 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 
 
+@pytest.mark.parametrize("prefix,suffix", [("pretrain", ""), ("train", ""), ("train", "_dflash")])
+@pytest.mark.parametrize(
+    "key,directory",
+    [
+        ("qwen25_1p5b", "Qwen2.5-1.5B-Instruct"),
+        ("qwen25_3b", "Qwen2.5-3B-Instruct"),
+        ("qwen25_7b", "Qwen2.5-7B-Instruct"),
+        ("qwen25_14b", "Qwen2.5-14B-Instruct"),
+        ("qwen3_1p7b", "Qwen3-1.7B"),
+        ("qwen3_4b", "Qwen3-4B"),
+        ("qwen3_8b", "Qwen3-8B"),
+    ],
+)
+def test_wrapper_identity_survives_stale_model_key(tmp_path, prefix, suffix, key, directory):
+    environment = {
+        k: v
+        for k, v in os.environ.items()
+        if k not in {"MODEL", "MODEL_ENV", "RUN_DIR", "RUN_NAME", "RESUME", "COMMON_ENV"}
+    }
+    result = subprocess.run(
+        ["bash", str(ROOT / f"{prefix}_{key}{suffix}.sh")],
+        env=dict(environment, MODEL_KEY="qwen25_3b", DRY_RUN="true", OUTPUT_ROOT=str(tmp_path)),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    run = Path(result.stdout.splitlines()[0].removeprefix("Run directory: "))
+    assert run.parent == tmp_path / prefix / key
+    if prefix == "pretrain":
+        assert "/workspace/storage-shared/models/" + directory in result.stdout
+    else:
+        config = json.loads(result.stdout[result.stdout.index("{\n") :])
+        assert config["policy"]["model_name"] == "/workspace/storage-shared/models/" + directory
+    assert not list(tmp_path.iterdir())
+
+
+@pytest.mark.parametrize(
+    "wrapper", ["pretrain_qwen25_1p5b.sh", "train_qwen25_1p5b.sh", "train_qwen25_1p5b_dflash.sh"]
+)
+def test_known_wrong_model_is_rejected_before_run_or_cuda(tmp_path, wrapper):
+    result = subprocess.run(
+        ["bash", str(ROOT / wrapper)],
+        env=dict(
+            os.environ,
+            MODEL_KEY="qwen25_3b",
+            MODEL="/models/Qwen2.5-3B-Instruct",
+            DRY_RUN="false",
+            OUTPUT_ROOT=str(tmp_path),
+        ),
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 2
+    assert "Model mismatch: wrapper MODEL_KEY=qwen25_1p5b" in result.stderr
+    assert "selects qwen25_3b" in result.stderr
+    assert "Checking base:" not in result.stderr
+    assert not list(tmp_path.iterdir())
+
+
+def test_explicit_custom_model_location_is_preserved(tmp_path):
+    target = str(tmp_path / "custom model folder")
+    environment = {k: v for k, v in os.environ.items() if k not in {"MODEL_ENV", "COMMON_ENV"}}
+    result = subprocess.run(
+        ["bash", str(ROOT / "pretrain_qwen25_1p5b.sh")],
+        env=dict(
+            environment,
+            MODEL=target,
+            MODEL_KEY="qwen25_3b",
+            DRY_RUN="true",
+            OUTPUT_ROOT=str(tmp_path),
+        ),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    import shlex
+
+    command = shlex.split(result.stdout.split("Command:", 1)[1])
+    assert command[command.index("--model") + 1] == target
+    assert command[command.index("--model-key") + 1] == "qwen25_1p5b"
+    assert not list(tmp_path.iterdir())
+
+
 @pytest.mark.parametrize(
     "model",
     ["qwen25_1p5b", "qwen25_3b", "qwen25_7b", "qwen25_14b", "qwen3_1p7b", "qwen3_4b", "qwen3_8b"],

@@ -4,6 +4,27 @@ set -euo pipefail
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "${MODEL_ENV:-$PROJECT_DIR/configs/$MODEL_KEY/b200.env}"
 source "${COMMON_ENV:-$PROJECT_DIR/configs/_shared/b200_common.env}"
+# MODEL remains overridable for checkpoints stored under custom paths. Reject
+# a known model directory from another wrapper before creating any run files.
+_dflash_model_name="${MODEL%/}"
+_dflash_model_name="${_dflash_model_name##*/}"
+_dflash_named_key=""
+case "${_dflash_model_name,,}" in
+  qwen2.5-1.5b|qwen2.5-1.5b-instruct) _dflash_named_key=qwen25_1p5b ;;
+  qwen2.5-3b|qwen2.5-3b-instruct) _dflash_named_key=qwen25_3b ;;
+  qwen2.5-7b|qwen2.5-7b-instruct) _dflash_named_key=qwen25_7b ;;
+  qwen2.5-14b|qwen2.5-14b-instruct) _dflash_named_key=qwen25_14b ;;
+  qwen3-1.7b) _dflash_named_key=qwen3_1p7b ;;
+  qwen3-4b) _dflash_named_key=qwen3_4b ;;
+  qwen3-8b) _dflash_named_key=qwen3_8b ;;
+esac
+if [[ -n "$_dflash_named_key" && "$_dflash_named_key" != "$MODEL_KEY" ]]; then
+  printf 'Model mismatch: wrapper MODEL_KEY=%s, but MODEL=%s selects %s.\n' \
+    "$MODEL_KEY" "$MODEL" "$_dflash_named_key" >&2
+  echo 'Unset a stale MODEL or pass MODEL=/path/to/the/correct/model; also check MODEL_ENV.' >&2
+  exit 2
+fi
+unset _dflash_model_name _dflash_named_key
 export PYTHON_BIN="${PYTHON_BIN:-$PROJECT_DIR/.venv/bin/python}"
 export PYTHONPATH="$PROJECT_DIR:$PROJECT_DIR/third_party/nemo-rl${PYTHONPATH:+:$PYTHONPATH}"
 export DFLASH_MCORE_PYTHON="${DFLASH_MCORE_PYTHON:-$PROJECT_DIR/.venv-mcore/bin/python}"
