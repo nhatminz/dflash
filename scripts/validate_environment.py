@@ -97,6 +97,8 @@ def runtime_errors(state, backend, lock):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--require-runtime", action="store_true")
+    parser.add_argument("--skip-reference-audit", action="store_true")
+    parser.add_argument("--no-runtime-cache", action="store_true")
     parser.add_argument("--model")
     parser.add_argument("--draft")
     parser.add_argument("--data")
@@ -112,15 +114,19 @@ def main():
         if sha != lock[name]["sha"]:
             raise RuntimeError(f"unexpected {name} commit: {sha}")
         report["sources"][name] = sha
-    original = json.loads((ROOT / "SOURCE_MANIFEST.json").read_text())["SpecNaacl_files"]
-    changed = [
-        file
-        for file, digest in original.items()
-        if not (ROOT.parent / file).is_file()
-        or hashlib.sha256((ROOT.parent / file).read_bytes()).hexdigest() != digest
-    ]
-    report["specnaacl_unchanged"] = not changed
-    report["changed_reference_files"] = changed
+    if not args.skip_reference_audit:
+        original = json.loads((ROOT / "SOURCE_MANIFEST.json").read_text())["SpecNaacl_files"]
+        changed = [
+            file
+            for file, digest in original.items()
+            if not (ROOT.parent / file).is_file()
+            or hashlib.sha256((ROOT.parent / file).read_bytes()).hexdigest() != digest
+        ]
+        report["specnaacl_unchanged"] = not changed
+        report["changed_reference_files"] = changed
+    else:
+        report["specnaacl_unchanged"] = None
+        report["reference_audit"] = "skipped (not a runtime dependency)"
     # The reference audit is read-only and is not a runtime dependency.
     if args.model:
         from dflash_reflex.model_contract import fingerprint, validate_checkpoint
@@ -158,6 +164,11 @@ def main():
         Path(args.output).write_text(result + "\n")
     if errors:
         raise RuntimeError("Runtime validation failed:\n" + "\n".join(errors))
+
+    if args.require_runtime and not args.no_runtime_cache:
+        from runtime_checks import record_setup_validation
+
+        record_setup_validation()
 
 
 if __name__ == "__main__":

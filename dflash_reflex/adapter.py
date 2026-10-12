@@ -49,6 +49,7 @@ class Adapter:
         self.revision = 0
         self.prior_feedback_density = None
         self.device_name = torch.cuda.get_device_name(head.device) if head.is_cuda else "cpu"
+        self.capability = torch.cuda.get_device_capability(head.device) if head.is_cuda else ()
 
     def wait(self):
         if self.has_event:

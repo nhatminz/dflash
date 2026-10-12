@@ -217,24 +217,32 @@ joint weights are under `resume/`, not duplicated into those directories.
 
 ```bash
 PYTHONPATH="$PWD:$PWD/third_party/nemo-rl" .venv-mcore/bin/python -m pytest tests -q
-PYTHONPATH="$PWD" .venv-vllm/bin/python scripts/benchmark_reflex_hotpath.py \
+PYTHONPATH="$PWD" .venv-vllm/bin/python scripts/benchmark_reflex_performance.py \
   --model-config /workspace/storage-shared/models/Qwen3-4B/config.json \
-  --requests 1 8 32 64 --repeats 15 \
+  --requests 1 8 32 64 --prefixes 0 1 2 4 8 15 --streams 0 1 --warmup 3 --repeats 15 \
   --output outputs/benchmarks/b200_hotpath.json \
   --cache outputs/benchmarks/b200_dispatch.json
 OPD_DISPATCH_CACHE="$PWD/outputs/benchmarks/b200_dispatch.json" \
   bash train_qwen3_4b.sh
 ```
 
-Microbenchmark cache keys include GPU, exact row/hidden/vocabulary/rank/top-k
-shape and dtype. GPU dispatch reads actual unique active_count. Unmatched shapes
-use sparse fused correction and the fused-statistics proposal; there is no automatic tuning sweep. Timings from this utility
-exclude transformer forwards and cannot establish end-to-end GRPO speedup.
+The complete Runtime benchmark includes Python metadata, GPU extraction, proposal,
+feedback, A/B updates and the next-proposal stream dependency. Calibration matches
+implementation revision, GPU/capability, hidden/vocabulary/rank/top-k/block size, both dtypes and update
+stream. Dynamic batches use nearest compatible measurements and recent feedback
+density; absent compatible calibration, `auto` uses `selective_masked`. Sparse
+correction remains the uncalibrated sparse/dense policy. Schema-2 kernel-only
+pipeline winners are ignored; regenerate schema 3 with the command above. These
+synthetic timings exclude transformer forwards and cannot establish rollout or
+GRPO throughput. See [measurements and commands](validation/reflex_performance_fix.md).
 `OPD_PROFILE=1` adds CUDA event timing, resolved only at the cohort boundary.
 
 `OPD_PIPELINE=auto` selects measured `fused`, `selective` or `selective_masked`
-paths by GPU/shape and the last completed cohort's feedback density. An unseen
-GPU defaults to the conservative fused path. Calibrate B200 separately; the
+paths by compatible GPU/shape buckets and recent completed feedback density.
+An unseen GPU defaults to `selective_masked`. `OPD_UPDATE_STREAM=0` is the new
+default: the local complete-path measurements showed lower CPU overhead for
+small batches and nearly equal latency for large ones. Compare both settings
+on B200; neither is claimed optimal there without real rollout measurement. Calibrate B200 separately; the
 RTX 3090 cache is evidence for that GPU only. Selected statistics retain the
 original logits until verification (no extra LM-head evaluation or B copy).
 This extends logits lifetime: BF16 64 requests x 15 slots x 151936 vocabulary

@@ -15,7 +15,7 @@ class ReflexConfig:
     projector_lr: float = 1e-4
     projector_weight_decay: float = 0.0
     update_interval: int = 1
-    update_stream: bool = True
+    update_stream: bool = False
     proposal_mode: str = "auto"
     dense_implementation: str = "auto"
     pipeline: str = "auto"

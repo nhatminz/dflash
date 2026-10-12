@@ -57,6 +57,33 @@ the upstream registry. The vLLM wheel's Python files are patched with a strict
 that reinstalls the wheel requires rerunning that patch command. Launchers
 never install packages or repair dependencies automatically.
 
+Launchers default to `RUNTIME_CHECK=auto`. A successful setup qualification seeds
+`.cache/runtime_checks/validation.json`; otherwise the first launch validates all
+three runtimes once. Subsequent launches use a stdlib-only fingerprint of Python
+executables/environments, installed package metadata/native-library file state,
+`versions.lock`, upstream HEADs/recursive submodule commits/modified patch files, installed vLLM hooks and
+validator code. A changed fingerprint triggers qualification again. A file lock
+serializes concurrent launches, so eight identical environments validate once.
+No imports of Torch/MCore/vLLM, binary-content hashing, fetching, installation or
+patch application occur on cache hits. The fingerprint still reads small files
+and stats native libraries; it is not an exhaustive corruption audit.
+
+Model/data/checkpoint compatibility, configuration and resume checks always run.
+Megatron builds/reuses its dataset helper during worker setup. `DRY_RUN=true`
+remains stdlib-only and does not qualify environments or create runs.
+
+```bash
+# Force qualification, including the read-only reference audit.
+RUNTIME_CHECK=full CUDA_VISIBLE_DEVICES=0 bash train_qwen25_3b.sh
+# Explicitly skip runtime imports for an already qualified server.
+RUNTIME_CHECK=skip CUDA_VISIBLE_DEVICES=0 bash train_qwen25_3b.sh
+```
+
+Setup still runs full qualification unless its existing explicit skip flag is
+used. `auto` omits the SpecNaacl reference audit; `full` and setup retain it.
+Explicit legacy `DFLASH_STARTUP_CHECKS=quick/full` maps to `skip/full` when
+`RUNTIME_CHECK` is unset. Library/model loading and Ray startup still take time.
+
 The setup command is provided but has not been executed against CUDA 13 in
 this workspace. Its success depends on access to upstream pinned wheels/git
 dependencies, the compiler toolchain and their ABI compatibility. These remain

@@ -32,8 +32,12 @@ def _scan(
     NORMALIZE: tl.constexpr = True,
     DISPATCH_COUNTS=None,
     COUNT_DENSE: tl.constexpr = False,
+    VALID_COUNT=None,
 ):
     row, tile = tl.program_id(0), tl.program_id(1)
+    if VALID_COUNT is not None:
+        if row >= tl.load(VALID_COUNT):
+            return
     if DISPATCH_COUNTS is not None:
         if (row == 0) & (tile == 0) & (MODE != 0 or COUNT_DENSE):
             dense = tl.full((), (MODE == 2) or COUNT_DENSE, tl.int32)
@@ -68,8 +72,9 @@ def _scan(
     for level in tl.static_range(8):
         mass = tl.sum(tl.reshape(mass, (BV // (1 << (level + 1)), 2)), 1)
     index = row * TILES + tile
-    tl.store(MAX + index, maximum)
-    tl.store(SUM + index, tl.sum(mass, 0))
+    if NORMALIZE:
+        tl.store(MAX + index, maximum)
+        tl.store(SUM + index, tl.sum(mass, 0))
     live = token < V
     for j in range(K):
         best = tl.max(raw, 0)
@@ -97,8 +102,16 @@ def _merge(
     WEIGHTS=None,
     FALLBACK_IDS=None,
     NORMALIZE: tl.constexpr = True,
+    OUT_ROWS=None,
+    VALID_COUNT=None,
 ):
     row = tl.program_id(0)
+    if VALID_COUNT is not None:
+        if row >= tl.load(VALID_COUNT):
+            return
+    output_row = row
+    if OUT_ROWS is not None:
+        output_row = tl.load(OUT_ROWS + row)
     if WEIGHTS is not None:
         if tl.load(WEIGHTS + row) <= 0:
             j = tl.arange(0, triton.next_power_of_2(K))
@@ -117,15 +130,16 @@ def _merge(
         sums = tl.load(SUM + row * TILES + t, t < TILES, other=0)
         maximum = tl.max(maxima, 0)
         total = tl.sum(sums * tl.exp(maxima - maximum), 0)
-    tl.store(NORM + row * 2, maximum)
-    tl.store(NORM + row * 2 + 1, total)
+    if NORMALIZE:
+        tl.store(NORM + row * 2, maximum)
+        tl.store(NORM + row * 2 + 1, total)
     c = tl.arange(0, BK)
     z = tl.load(VALUES + row * TILES * K + c, c < TILES * K, other=-float("inf"))
     ids = tl.load(IDS + row * TILES * K + c, c < TILES * K, other=V)
     for j in range(K):
         best = tl.max(z, 0)
         chosen = tl.min(tl.where(z == best, ids, V), 0)
-        tl.store(OUT_IDS + row * K + j, chosen)
+        tl.store(OUT_IDS + output_row * K + j, chosen)
         if NORMALIZE:
             tl.store(Q + row * K + j, tl.div_rn(tl.exp(best - maximum), total))
         z = tl.where(ids == chosen, -float("inf"), z)
@@ -133,9 +147,9 @@ def _merge(
 
 class ProposalWorkspace:
     @torch.inference_mode(False)
-    def __init__(self, rows, vocab, rank, topk, device):
+    def __init__(self, rows, vocab, rank, topk, device, tile_size=256):
         self.rows, self.vocab, self.topk = rows, vocab, min(topk, vocab)
-        tiles = triton.cdiv(vocab, 256)
+        tiles = triton.cdiv(vocab, tile_size)
         self.maxima = torch.empty(rows, tiles, device=device)
         self.argmax_ids = torch.empty(rows, tiles, device=device, dtype=torch.long)
         self.sums = torch.empty_like(self.maxima)
@@ -147,6 +161,21 @@ class ProposalWorkspace:
         self.u = torch.empty(rows, rank, device=device)
         self.dense = None  # Allocated only if an explicit GEMM is selected.
         self.corrected_raw = None
+        self.hidden_fp32 = None
+
+
+def project_hidden(adapter, hidden, workspace):
+    source = hidden
+    if hidden.dtype != torch.float32:
+        if workspace.hidden_fp32 is None or workspace.hidden_fp32.shape[1] != hidden.shape[1]:
+            workspace.hidden_fp32 = torch.empty(
+                workspace.rows, hidden.shape[1], device=hidden.device, dtype=torch.float32
+            )
+        source = workspace.hidden_fp32[: hidden.shape[0]]
+        source.copy_(hidden)
+    u = workspace.u[: hidden.shape[0]]
+    torch.mm(source, adapter.A, out=u)
+    return u
 
 
 @torch.no_grad()
@@ -157,9 +186,7 @@ def propose(adapter, hidden, raw, workspace):
     k, rank = workspace.topk, adapter.config.rank
     workspace.corrected_raw = None
     with adapter.phase("logit_correction_ms"):
-        u = workspace.u[:n]
-        # FP32 input is small (slots*hidden), never slots*vocab*rank.
-        torch.mm(hidden.float(), adapter.A, out=u)
+        u = project_hidden(adapter, hidden, workspace)
         selected = adapter.config.proposal_mode
         dense_impl = adapter.config.dense_implementation
         # Legacy caches used a host upper bound and cannot select safely.
@@ -247,6 +274,9 @@ def _target_q(
     P=None,
 ):
     row, slot = tl.program_id(0), tl.program_id(1)
+    if tl.load(WEIGHTS + row) <= 0:
+        tl.store(Q + row * K + slot, 0.0)
+        return
     token = tl.load(TIDS + row * K + slot)
     if token < 0:
         tl.store(Q + row * K + slot, 0.0)
@@ -421,6 +451,18 @@ class FeedbackWorkspace:
         self.teacher_flags = torch.empty(rows, device=device)
         self.teacher_sorted = torch.empty(rows, topk, device=device, dtype=torch.long)
         self.rows, self.rank, self.topk, self.device = rows, rank, topk, device
+        self.compact_rows = torch.empty(rows, device=device, dtype=torch.int32)
+        self.valid_count = torch.empty((), device=device, dtype=torch.int32)
+        self.greedy_teacher = None
+
+
+@triton.jit
+def _compact_teacher_rows(WEIGHTS, ROWS, COUNT, N: tl.constexpr, BN: tl.constexpr):
+    row = tl.arange(0, BN)
+    live = tl.load(WEIGHTS + row, row < N, other=0) > 0
+    offsets = tl.cumsum(live.to(tl.int32)) - 1
+    tl.store(ROWS + offsets, row, live)
+    tl.store(COUNT, tl.sum(live.to(tl.int32), 0))
 
 
 @torch.no_grad()
@@ -468,31 +510,58 @@ def feedback(
             if greedy_teacher:
                 teacher_ids = workspace.teacher_sorted[:n]
                 teacher_ids.fill_(-1)
-                teacher_ids[:, 0].copy_(p.argmax(-1))
-            elif not masked_teacher:
-                # Fast topk plus a single small canonicalization kernel. Only a
-                # positive boundary tie scans P, in increasing token-ID order.
-                count = min(k + 1, vocab)
-                values, candidates = p.topk(count, dim=-1, sorted=True)
-                _teacher_flags[(n,)](
-                    values,
-                    candidates,
-                    weights,
-                    workspace.teacher_flags,
-                    workspace.teacher_sorted,
+                tiles = triton.cdiv(vocab, 1024)
+                if workspace.greedy_teacher is None:
+                    workspace.greedy_teacher = (
+                        torch.empty(workspace.rows, tiles, device=p.device),
+                        torch.empty(workspace.rows, tiles, device=p.device, dtype=torch.long),
+                    )
+                values, indices = workspace.greedy_teacher
+                _argmax_scan[(n, tiles)](
                     p,
-                    k,
-                    count,
-                    triton.next_power_of_2(count),
+                    u,
+                    adapter.B,
+                    adapter.active,
+                    adapter.active_count,
+                    values,
+                    indices,
                     vocab,
+                    rank,
+                    tiles,
+                    0,
+                    0,
                     1024,
+                    WEIGHTS=weights,
                 )
-                teacher_ids = workspace.teacher_sorted[:n]
+                _argmax_merge[(n,)](
+                    values,
+                    indices,
+                    teacher_ids,
+                    vocab,
+                    k,
+                    tiles,
+                    triton.next_power_of_2(tiles),
+                    WEIGHTS=weights,
+                )
             else:
                 if workspace.teacher is None:
-                    workspace.teacher = ProposalWorkspace(workspace.rows, vocab, rank, k, p.device)
+                    workspace.teacher = ProposalWorkspace(
+                        workspace.rows, vocab, rank, k, p.device, tile_size=2048
+                    )
+                    workspace.teacher.ids = workspace.teacher_sorted
                 teacher = workspace.teacher
-                tiles = triton.cdiv(vocab, 256)
+                # Both variants skip zero weights BEFORE any vocabulary read.
+                # Compaction stays on the GPU; launches have a fixed capacity.
+                compact = not masked_teacher
+                if compact:
+                    _compact_teacher_rows[(1,)](
+                        weights,
+                        workspace.compact_rows,
+                        workspace.valid_count,
+                        n,
+                        triton.next_power_of_2(n),
+                    )
+                tiles = triton.cdiv(vocab, 2048)
                 _scan[(n, tiles)](
                     p,
                     u,
@@ -506,9 +575,11 @@ def feedback(
                     rank,
                     k,
                     tiles,
-                    256,
+                    2048,
                     0,
-                    WEIGHTS=weights,
+                    WEIGHTS=None if compact else weights,
+                    ROWS=workspace.compact_rows if compact else None,
+                    VALID_COUNT=workspace.valid_count if compact else None,
                     NORMALIZE=False,
                     enable_fp_fusion=False,
                 )
@@ -525,7 +596,9 @@ def feedback(
                     tiles,
                     triton.next_power_of_2(tiles),
                     triton.next_power_of_2(tiles * k),
-                    WEIGHTS=weights,
+                    WEIGHTS=None if compact else weights,
+                    OUT_ROWS=workspace.compact_rows if compact else None,
+                    VALID_COUNT=workspace.valid_count if compact else None,
                     NORMALIZE=False,
                     enable_fp_fusion=False,
                 )
@@ -625,8 +698,12 @@ def _argmax_scan(
     THRESHOLD: tl.constexpr,
     BV: tl.constexpr,
     DISPATCH_COUNTS=None,
+    WEIGHTS=None,
 ):
     row, tile = tl.program_id(0), tl.program_id(1)
+    if WEIGHTS is not None:
+        if tl.load(WEIGHTS + row) <= 0:
+            return
     if DISPATCH_COUNTS is not None:
         if (row == 0) & (tile == 0) & (MODE != 0):
             dense = tl.full((), MODE == 2, tl.int32)
@@ -654,9 +731,19 @@ def _argmax_scan(
 
 @triton.jit
 def _argmax_merge(
-    VALUES, IDS, OUT, V: tl.constexpr, K: tl.constexpr, TILES: tl.constexpr, BT: tl.constexpr
+    VALUES,
+    IDS,
+    OUT,
+    V: tl.constexpr,
+    K: tl.constexpr,
+    TILES: tl.constexpr,
+    BT: tl.constexpr,
+    WEIGHTS=None,
 ):
     row = tl.program_id(0)
+    if WEIGHTS is not None:
+        if tl.load(WEIGHTS + row) <= 0:
+            return
     tile = tl.arange(0, BT)
     z = tl.load(VALUES + row * TILES + tile, tile < TILES, other=-float("inf"))
     ids = tl.load(IDS + row * TILES + tile, tile < TILES, other=V)
@@ -671,13 +758,12 @@ def greedy_propose(adapter, hidden, raw, workspace):
     workspace.corrected_raw = None
     if n > workspace.rows or not raw.is_contiguous():
         raise ValueError("proposal workspace or contiguous logits contract violated")
-    u = workspace.u[:n]
-    torch.mm(hidden.float(), adapter.A, out=u)
+    u = project_hidden(adapter, hidden, workspace)
     mode = {"auto": 3, "sparse": 1, "dense": 2}[adapter.config.proposal_mode]
     if not adapter.has_updated:
         mode = 0
     threshold = dispatch_threshold(adapter, n, hidden.shape[-1], vocab, hidden.dtype, raw.dtype)
-    tiles = triton.cdiv(vocab, 256)
+    tiles = triton.cdiv(vocab, 1024)
     _argmax_scan[(n, tiles)](
         raw,
         u,
@@ -691,7 +777,7 @@ def greedy_propose(adapter, hidden, raw, workspace):
         tiles,
         mode,
         threshold,
-        256,
+        1024,
         DISPATCH_COUNTS=adapter.dispatch_counts,
         enable_fp_fusion=False,
     )

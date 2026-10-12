@@ -270,7 +270,7 @@ def main():
             k: v
             for k, v in os.environ.items()
             if (k.startswith(("PRETRAIN_", "DFLASH_", "OPD_")) or k == "MODEL")
-            and k != "DFLASH_RESUMING"
+            and k not in {"DFLASH_RESUMING", "DFLASH_STARTUP_CHECKS"}
         }
     if a.dry_run:
         print(json.dumps(config, indent=2))
@@ -338,6 +338,7 @@ def main():
         # Step limits may be extended for a smoke-test continuation. The
         # pretraining schedule is based on full epochs, not this stop limit.
         if a.kind == "pretrain":
+            saved.pop("DFLASH_STARTUP_CHECKS", None)
             saved.pop("PRETRAIN_MAX_STEPS", None)
             comparison.pop("PRETRAIN_MAX_STEPS", None)
         else:

@@ -12,6 +12,32 @@ Megatron đầy đủ trên B200**, vì thiếu runtime CUDA 13 và đường d�
 được yêu cầu. Các lệnh dưới đây dành cho máy có dữ liệu và môi trường phù hợp;
 không hiểu kết quả kiểm thử nhỏ là xác nhận chạy dài đã thành công.
 
+Launcher mặc định `RUNTIME_CHECK=auto`: kiểm tra sâu runtime một lần, lưu kết quả
+vào `.cache/runtime_checks/validation.json`, rồi dùng fingerprint nhẹ ở các lần
+chạy sau. Thay Python, package, lock, commit upstream hoặc patch sẽ làm cache hết
+hạn. Các job khởi động cùng lúc dùng khóa chung để tránh kiểm tra sâu trùng lặp.
+Setup thành công cũng ghi cache này. Model/data/checkpoint/resume vẫn được kiểm
+tra mỗi lần; `DRY_RUN=true` không import runtime. Không phải cài lại thư viện.
+
+```bash
+# Mặc định: cache kiểm tra môi trường, auto ưu tiên selective_masked nếu chưa calibration.
+CUDA_VISIBLE_DEVICES=0 METRICS_MODE=instrumented bash train_qwen25_3b.sh
+# B200 đã được kiểm tra: bỏ ngay phần kiểm tra thư viện nặng.
+RUNTIME_CHECK=skip CUDA_VISIBLE_DEVICES=0 METRICS_MODE=instrumented bash train_qwen25_3b.sh
+# Ép kiểm tra đầy đủ khi cần điều tra môi trường.
+RUNTIME_CHECK=full CUDA_VISIBLE_DEVICES=0 bash train_qwen25_3b.sh
+```
+
+`OPD_PIPELINE=auto` dùng calibration phù hợp GPU/dtype/model và mật độ feedback
+gần đây; thiếu calibration sẽ dùng `selective_masked`. Có thể ép bằng
+`OPD_PIPELINE=selective_masked`. Số vòng của từng pipeline xuất hiện trong
+`logs/metrics.jsonl` (`opd_pipeline_rounds`), `rollout_timing.csv` và `summary.json`.
+Dùng `METRICS_MODE=instrumented` cho **cả hai** phương pháp để xem AAL của baseline.
+Giữ eager/V1, batch 8, accum 4 và checkpoint mỗi 50 step như trước.
+
+Xem [báo cáo tối ưu](validation/reflex_performance_fix.md) để có lệnh calibration
+B200 và 8 lệnh train cho 4 model. Số đo RTX 3090 không chứng minh tốc độ B200.
+
 ## Cập nhật lỗi CUDA khi rollout trên B200
 
 Log ngày 12/10 dừng bởi `CUDA illegal memory access` trong generation; các dòng
@@ -370,7 +396,7 @@ loss, pretrained drafter và online co-training giống nhau giữa hai chế đ
 | Reflex | `OPD_RANK=8`, `OPD_TOPK=16`, `OPD_FAST_LR=0.01`, `OPD_UPDATE_INTERVAL=1` |
 | A | `OPD_TRAIN_PROJECTOR=1`, `OPD_PROJECTOR_LR=1e-4`, `OPD_PROJECTOR_WEIGHT_DECAY=0` |
 | Feedback | `OPD_ACCEPTED_WEIGHT=1`, `OPD_REJECTED_WEIGHT=1` |
-| Kernels | `OPD_UPDATE_STREAM=1`, `OPD_PROPOSAL_MODE=auto`, `OPD_DENSE_IMPLEMENTATION=auto` |
+| Kernels | `OPD_UPDATE_STREAM=0`, `OPD_PROPOSAL_MODE=auto`, `OPD_DENSE_IMPLEMENTATION=auto` |
 | Profiling | `OPD_PROFILE=0`, `OPD_DIAGNOSTICS=0`, `OPD_DISPATCH_CACHE=` |
 | Data/seed | `DATASET=simplelr`, `TRAIN_SUBSET_SEED=42`, `MAX_TRAIN_SAMPLES=0` |
 | Duration | `TRAIN_EPOCHS=1`, `MAX_GRPO_STEPS=1000000`, `SAVE_INTERVAL=50` |
@@ -519,15 +545,15 @@ DATASET=simplelr bash train_qwen3_4b.sh
 PYTHONPATH="$PWD" .venv-vllm/bin/python scripts/benchmark_rollout.py \
   --mode micro --rows 64 --hidden 2560 --vocab 151936 --rank 8 --topk 16 \
   --repeats 10 --output outputs/benchmarks/b200_qwen3_4b.json \
-  --cache outputs/benchmarks/b200_dispatch.json
-OPD_DISPATCH_CACHE="$PWD/outputs/benchmarks/b200_dispatch.json" bash train_qwen3_4b.sh
+  --cache outputs/benchmarks/b200_thresholds.json
+OPD_DISPATCH_CACHE="$PWD/outputs/benchmarks/b200_thresholds.json" bash train_qwen3_4b.sh
 ```
 
 Microbenchmark có ba mức active vocabulary, so sparse/fused dense/GEMM và
 feedback; không chạy transformer hoặc GRPO. Cache chỉ dùng cho GPU và shape
 trùng hoàn toàn. `--rows` là số MASK slots thực tế trong một proposal batch,
 không phải số prompt; có thể thay bằng shape đang quan tâm. Shape không có
-cache dùng sparse fused và proposal fused bảo thủ; không tự sweep. Kết quả RTX 3090 nhỏ trong
+cache dùng sparse correction và proposal selective_masked; không tự sweep. Kết quả RTX 3090 nhỏ trong
 `validation/cuda_microbenchmark.json` không được dùng làm số liệu B200.
 
 Profile CUDA event nằm trong `metrics.jsonl.profile_ms`: target forward
@@ -573,9 +599,9 @@ Chạy benchmark ngắn trên B200 một lần rồi dùng cache đúng GPU:
 
 ```bash
 mkdir -p outputs/benchmarks
-PYTHONPATH="$PWD" .venv-vllm/bin/python scripts/benchmark_reflex_hotpath.py \
+PYTHONPATH="$PWD" .venv-vllm/bin/python scripts/benchmark_reflex_performance.py \
   --model-config /workspace/storage-shared/models/Qwen3-4B/config.json \
-  --requests 1 8 32 64 --repeats 15 \
+  --requests 1 8 32 64 --prefixes 0 1 2 4 8 15 --streams 0 1 --warmup 3 --repeats 15 \
   --cache outputs/benchmarks/b200_dispatch.json \
   --output outputs/benchmarks/b200_hotpath.json
 export OPD_DISPATCH_CACHE="$PWD/outputs/benchmarks/b200_dispatch.json"
@@ -587,8 +613,11 @@ FAIRNESS_PROFILE=native_dflash DATASET=dapo bash train_qwen3_4b.sh
 FAIRNESS_PROFILE=native_dflash DATASET=simplelr RESUME=auto bash train_qwen3_4b.sh
 ```
 
-`OPD_PIPELINE=auto` dùng đo đạc theo GPU/shape; feedback density chỉ đọc ở cuối
-cohort. Có thể cố định fused/selective/selective_masked để tái lập kernel.
+`OPD_PIPELINE=auto` dùng calibration schema 3 theo GPU/shape và mật độ feedback gần đây.
+Thống kê trong cohort được copy async mỗi 16 vòng và chỉ đọc khi event đã xong.
+Cuối cohort cập nhật tỷ lệ valid rows / tổng teacher rows cho cohort sau. Có thể
+cố định fused/selective/selective_masked để tái lập kernel. `OPD_UPDATE_STREAM=0`
+là mặc định mới dựa trên số đo local; so lại 0/1 trên B200 bằng rollout thật.
 Các candidate đều giữ q của đúng A/B/head lúc proposal, giữ logits gốc đến verify
 và chặn stale version. Không nhân bản B hoặc tính lại LM head. Thêm lifetime
 logits tối đa khoảng 278 MiB cho 64 request BF16 (556 MiB nếu logits FP32);

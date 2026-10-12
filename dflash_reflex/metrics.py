@@ -77,6 +77,9 @@ FIELDS += (
     "opd_dense_dispatch_count",
     "opd_update_time_s",
     "opd_correction_time_s",
+    "iter_pipeline_fused_rounds",
+    "iter_pipeline_selective_rounds",
+    "iter_pipeline_selective_masked_rounds",
 )
 
 
@@ -347,6 +350,15 @@ class Metrics:
                 row[name] = None
         if not self.state["core_metrics_available"]:
             row["cumulative_aal"] = row["cumulative_acceptance_rate"] = None
+        pipeline_rounds = {
+            name: sum(p.get("pipeline_rounds", {}).get(name, 0) for p in packets)
+            for name in ("fused", "selective", "selective_masked")
+        }
+        cumulative = dict(self.state.get("pipeline_rounds", {}))
+        for name, count in pipeline_rounds.items():
+            row[f"iter_pipeline_{name}_rounds"] = count
+            cumulative[name] = cumulative.get(name, 0) + count
+        self.state["pipeline_rounds"] = cumulative
         row = json_value(row)
         new = not self.path.exists() or self.path.stat().st_size == 0
         with self.path.open("a", newline="") as f:
@@ -357,6 +369,10 @@ class Metrics:
         extra = dict(
             row,
             profile_ms=profile,
+            opd_pipeline_rounds=pipeline_rounds,
+            opd_selected_pipelines=sorted(
+                {p["selected_pipeline"] for p in packets if p.get("selected_pipeline")}
+            ),
             upstream_timing=timing,
             upstream_metrics=train_metrics or {},
             rollout_hook_health=[

@@ -185,3 +185,29 @@ def test_production_resume_wall_includes_startup_and_completed_session_drain(tmp
     row = resumed.record(0, 2, [packet], {}, wall=5.0)
     assert row["cumulative_wall_time_s"] == 22.0  # 15 + 2 setup + 5 iteration.
     assert row["cumulative_aal"] is None
+
+
+def test_pipeline_counts_survive_logging_and_resume(tmp_path):
+    import json
+
+    packet = dict(
+        counters=torch.tensor([4, 2, 2, 30, 2, 0.1, 0.2, 2]),
+        generated_tokens=4,
+        generation_time_s=1.0,
+        updates=2,
+        profile_ms={},
+        pipeline_rounds=dict(fused=0, selective=1, selective_masked=1),
+        selected_pipeline="selective_masked",
+    )
+    logger = Metrics(tmp_path, "dflash_reflex", "simplelr")
+    row = logger.record(0, 1, [packet], {}, wall=1.0)
+    assert row["iter_pipeline_selective_masked_rounds"] == 1
+    extra = json.loads((tmp_path / "logs/metrics.jsonl").read_text().splitlines()[-1])
+    assert extra["opd_pipeline_rounds"]["selective"] == 1
+    logger = Metrics(tmp_path, "dflash_reflex", "simplelr", dict(logger.state))
+    logger.record(0, 2, [packet], {}, wall=1.0)
+    assert logger.state["pipeline_rounds"]["selective_masked"] == 2
+    assert (
+        json.loads((tmp_path / "summary.json").read_text())["pipeline_rounds"]["selective_masked"]
+        == 2
+    )

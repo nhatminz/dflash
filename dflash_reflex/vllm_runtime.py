@@ -14,6 +14,7 @@ import torch
 from .adapter import Adapter
 from .checkpointing import restore_rng, rng_state
 from .config import ReflexConfig
+from .dispatch import PipelinePolicy
 from .rollout_state import CohortState
 
 _runtime = None
@@ -58,6 +59,12 @@ class Runtime:
         self.raw_requests = {}
         self.proposal_stamp = None
         self.pipeline = "fused"
+        self.pipeline_policy = None
+        self.pipeline_rounds = dict(fused=0, selective=0, selective_masked=0)
+        self.metadata_workspace = None
+        self.density_pending = None
+        self.density_host = self.density_event = None
+        self.raw_order = None
         self.positions = (
             torch.arange(runner.speculative_config.num_speculative_tokens + 1, device=runner.device)
             if self.capture
@@ -87,6 +94,7 @@ class Runtime:
         self.verification_start = None
         self.proposal_calls = 0
         self.verification_calls = 0
+        self.feedback_capacity_rows = 0
 
     def acceptance_buffer(self, batch_size):
         if not 0 <= batch_size <= self.runner.max_num_reqs:
@@ -175,7 +183,10 @@ class Runtime:
         # Retain compute_logits output, without copying a vocabulary matrix or B.
         # This also preserves head bias, dtype rounding and logit processing.
         self.raw = raw
-        self.raw_requests = {key: i * width for i, key in enumerate(self.request_ids)}
+        order = tuple(self.request_ids)
+        if self.raw_order != order:
+            self.raw_requests = {key: i * width for i, key in enumerate(order)}
+            self.raw_order = order
         self.proposal_stamp = (
             self.adapter.revision,
             self.version,
@@ -185,19 +196,32 @@ class Runtime:
         )
         self.pipeline = self.config.pipeline
         if self.pipeline == "auto":
-            key = f"{self.adapter.device_name}|{batch}|{width}|{hidden.shape[-1]}|{raw.shape[-1]}|{self.config.rank}|{self.config.topk}|{hidden.dtype}"
-            if raw.dtype != hidden.dtype:
-                key += f"|logits={raw.dtype}"
-            entries = self.adapter.dispatch_cache.get("pipelines_by_density", {}).get(key)
-            prior = self.adapter.prior_feedback_density
-            if self.config.update_interval != 1:
-                self.pipeline = "fused"
-            elif entries and prior is not None:
-                self.pipeline = min(entries, key=lambda entry: abs(entry["density"] - prior))[
-                    "pipeline"
-                ]
-            else:
-                self.pipeline = self.adapter.dispatch_cache.get("pipelines", {}).get(key, "fused")
+            if self.pipeline_policy is None:
+                self.pipeline_policy = PipelinePolicy(
+                    self.adapter.dispatch_cache,
+                    gpu=self.adapter.device_name,
+                    capability=self.adapter.capability,
+                    hidden=hidden.shape[-1],
+                    vocab=raw.shape[-1],
+                    rank=self.config.rank,
+                    topk=min(self.config.topk, raw.shape[-1]),
+                    width=width,
+                    dtype=hidden.dtype,
+                    logits_dtype=raw.dtype,
+                    update_stream=self.config.update_stream,
+                )
+            if self.density_pending is not None and self.density_event.query():
+                density = float(self.density_host) / self.density_pending
+                prior = self.adapter.prior_feedback_density
+                self.adapter.prior_feedback_density = (
+                    density if prior is None else 0.75 * prior + 0.25 * density
+                )
+                self.density_pending = None
+            self.pipeline = (
+                self.pipeline_policy.select(batch, self.adapter.prior_feedback_density)
+                if self.config.update_interval == 1
+                else "fused"
+            )
         # GEMM changes reduction order; selective uses the fused FP32 reference.
         if self.config.pipeline == "auto" and self.config.dense_implementation == "gemm":
             self.pipeline = "fused"
@@ -208,15 +232,17 @@ class Runtime:
         )
         with self.phase("corrected_argmax_ms"):
             ids, q, norm, u = function(self.adapter, hidden, raw, self.proposal_workspace)
-        slots = self.cache.proposal_slots(self.request_ids)
-        row = torch.tensor(slots, device=hidden.device)
-        # The caches retain MASK states only. The anchor/bonus has no OPD row.
-        self.cache.h[row] = hidden.view(batch, width, -1)
-        self.cache.u[row] = u.view(batch, width, -1)
+        self.cache.proposal_slots(self.request_ids)
+        # Only one proposal batch is outstanding (guarded by raw_requests/stamp).
+        # Store in proposal order; verification maps reordered requests to these
+        # contiguous rows without GPU scatter or a host-to-device slot vector.
+        n = hidden.shape[0]
+        self.cache.h.view(-1, hidden.shape[-1])[:n].copy_(hidden)
+        self.cache.u.view(-1, self.config.rank)[:n].copy_(u)
         if self.pipeline == "fused":
-            self.cache.ids[row] = ids.view(batch, width, -1)
-            self.cache.q[row] = q.view(batch, width, -1)
-            self.cache.norm[row] = norm.view(batch, width, 2)
+            self.cache.ids.view(-1, ids.shape[-1])[:n].copy_(ids)
+            self.cache.q.view(-1, q.shape[-1])[:n].copy_(q)
+            self.cache.norm.view(-1, 2)[:n].copy_(norm)
         # vLLM retains this tensor and may read it on its CPU-copy stream.
         # The top-k workspace is reused by later proposal/selective-feedback
         # kernels. Transfer ownership of the small argmax vector to vLLM;
@@ -258,44 +284,45 @@ class Runtime:
             end.record()
             self.profile_events.append(("target_verification_ms", self.verification_start, end))
             self.verification_start = None
-        device = output_ids.device
-        extract_start = torch.cuda.Event(enable_timing=True) if self.config.profile else None
-        if extract_start is not None:
-            extract_start.record()
-        lengths = torch.tensor(metadata.num_draft_tokens, device=device, dtype=torch.long)
-        width = output_ids.shape[1] - 1
-        slots = self.positions[: width + 1][None, :]
-        limits = torch.tensor(self.remaining, device=device, dtype=torch.long)
-        stop_width = max((len(ids) for ids in self.eos), default=0)
-        if stop_width:
-            stops = torch.tensor(
-                [ids + [-2] * (stop_width - len(ids)) for ids in self.eos], device=device
-            )
-            at_eos = (output_ids[:, :, None] == stops[:, None, :]).any(-1)
-            eos_pos = torch.where(at_eos, slots, width + 1).amin(-1)
-            limits = torch.minimum(limits, eos_pos + 1)
-        live = ~self.discard
-        emitted = (output_ids >= 0) & (slots < limits[:, None]) & live[:, None]
-        count = emitted.sum(-1)
-        accepted_live = torch.minimum(accepted.long(), limits) * live
-        verified = (lengths > 0) & live
-        proposed = torch.minimum(lengths, limits) * live
-        self.counters[:4].add_(
-            torch.stack(
-                (
-                    torch.where(verified, count, 0).sum(),
-                    verified.sum(),
-                    torch.where(verified, accepted_live, 0).sum(),
-                    proposed.sum(),
-                )
-            ).double()
-        )
         if not self.enabled or not p.shape[0]:
+            device = output_ids.device
+            extract_start = torch.cuda.Event(enable_timing=True) if self.config.profile else None
             if extract_start is not None:
-                end = torch.cuda.Event(enable_timing=True)
-                end.record()
-                self.profile_events.append(("feedback_extraction_ms", extract_start, end))
-            return
+                extract_start.record()
+            lengths = torch.tensor(metadata.num_draft_tokens, device=device, dtype=torch.long)
+            width = output_ids.shape[1] - 1
+            slots = self.positions[: width + 1][None, :]
+            limits = torch.tensor(self.remaining, device=device, dtype=torch.long)
+            stop_width = max((len(ids) for ids in self.eos), default=0)
+            if stop_width:
+                stops = torch.tensor(
+                    [ids + [-2] * (stop_width - len(ids)) for ids in self.eos], device=device
+                )
+                at_eos = (output_ids[:, :, None] == stops[:, None, :]).any(-1)
+                eos_pos = torch.where(at_eos, slots, width + 1).amin(-1)
+                limits = torch.minimum(limits, eos_pos + 1)
+            live = ~self.discard
+            emitted = (output_ids >= 0) & (slots < limits[:, None]) & live[:, None]
+            count = emitted.sum(-1)
+            accepted_live = torch.minimum(accepted.long(), limits) * live
+            verified = (lengths > 0) & live
+            proposed = torch.minimum(lengths, limits) * live
+            self.counters[:4].add_(
+                torch.stack(
+                    (
+                        torch.where(verified, count, 0).sum(),
+                        verified.sum(),
+                        torch.where(verified, accepted_live, 0).sum(),
+                        proposed.sum(),
+                    )
+                ).double()
+            )
+            if not self.enabled or not p.shape[0]:
+                if extract_start is not None:
+                    end = torch.cuda.Event(enable_timing=True)
+                    end.record()
+                    self.profile_events.append(("feedback_extraction_ms", extract_start, end))
+                return
         if self.adapter is None:
             raise RuntimeError("verification before a captured DFlash proposal")
         stamp = (
@@ -314,45 +341,27 @@ class Runtime:
             for request, length in zip(self.request_ids, metadata.num_draft_tokens, strict=True)
         ):
             raise RuntimeError("overlapping proposal batches are unsupported by synchronous Reflex")
-        indices = self.cache.verification_slots(self.request_ids, metadata.num_draft_tokens)
-        # One GPU vector covers all variable-length requests; no token loop.
-        n = metadata.draft_token_ids.numel()
-        request_rows = torch.repeat_interleave(
-            self.request_positions[: len(indices)], lengths, output_size=n
-        )
-        starts = torch.cat((lengths.new_zeros(1), lengths.cumsum(0)[:-1]))
-        position = self.feedback_positions[:n] - starts[request_rows]
-        cache_row = torch.tensor(indices, device=device)[request_rows]
-        raw_starts = torch.tensor(
-            [self.raw_requests.get(key, 0) for key in self.request_ids],
-            device=device,
-            dtype=torch.long,
-        )
-        raw_rows = raw_starts[request_rows] + position
-        accepted_slot = position < accepted[request_rows]
-        selected = (
-            (position <= accepted[request_rows])
-            & (position < limits[request_rows])
-            & live[request_rows]
-            & (metadata.draft_token_ids >= 0)
-        )
-        weights = torch.where(
-            selected,
-            torch.where(accepted_slot, self.config.accepted_weight, self.config.rejected_weight),
-            0.0,
-        )
-        h = self.cache.h[cache_row, position].contiguous()
-        u = self.cache.u[cache_row, position].contiguous()
-        di = self.cache.ids[cache_row, position].contiguous()
-        dq = self.cache.q[cache_row, position].contiguous()
-        norm = self.cache.norm[cache_row, position].contiguous()
+        self.cache.verification_slots(self.request_ids, metadata.num_draft_tokens)
         from . import kernels
+        from .runtime_metadata import MetadataWorkspace
 
-        if extract_start is not None:
-            end = torch.cuda.Event(enable_timing=True)
-            end.record()
-            self.profile_events.append(("feedback_extraction_ms", extract_start, end))
+        if self.metadata_workspace is None:
+            self.metadata_workspace = MetadataWorkspace(
+                self.runner.max_num_reqs,
+                configured_width,
+                self.cache.h.shape[-1],
+                self.config.rank,
+                self.cache.ids.shape[-1],
+                output_ids.device,
+            )
+        with self.phase("feedback_extraction_ms"):
+            h, u, di, dq, norm, weights, raw_rows = self.metadata_workspace.extract(
+                self, accepted, metadata, output_ids
+            )
+        self.pipeline_rounds[self.pipeline] += 1
+        self.feedback_capacity_rows += p.shape[0]
         adapter = self.adapter
+        device = output_ids.device
         if adapter.stream is not None:
             adapter.stream.wait_stream(torch.cuda.current_stream(device))
             with torch.cuda.stream(adapter.stream):
@@ -375,6 +384,7 @@ class Runtime:
                 )
                 if sums is not None:
                     self.counters[4:].add_(sums.double())
+                self.sample_density(sums, p.shape[0])
                 adapter.ready.record()
             for tensor in (h, u, di, dq, norm, p, weights, self.raw, raw_rows):
                 tensor.record_stream(adapter.stream)
@@ -399,6 +409,25 @@ class Runtime:
             )
             if sums is not None:
                 self.counters[4:].add_(sums.double())
+            self.sample_density(sums, p.shape[0])
+
+    def sample_density(self, sums, rows):
+        # Sparse asynchronous telemetry, never a blocking GPU scalar read.
+        # A missing calibration uses a constant fallback and needs no telemetry.
+        if (
+            sums is None
+            or self.pipeline_policy is None
+            or not self.pipeline_policy.entries
+            or self.verification_calls % 16
+            or self.density_pending is not None
+        ):
+            return
+        if self.density_host is None:
+            self.density_host = torch.empty((), dtype=torch.float32, pin_memory=True)
+            self.density_event = torch.cuda.Event()
+        self.density_host.copy_(sums[3], non_blocking=True)
+        self.density_event.record()
+        self.density_pending = rows
 
     @torch.no_grad()
     def finish(self):
@@ -421,6 +450,8 @@ class Runtime:
             metrics_mode=self.config.metrics_mode,
             proposal_calls=self.proposal_calls,
             verification_calls=self.verification_calls,
+            pipeline_rounds=self.pipeline_rounds,
+            selected_pipeline=self.pipeline if self.enabled else None,
             model_runner_module=type(self.runner).__module__,
         )
         if self.adapter is not None:
@@ -433,8 +464,11 @@ class Runtime:
                 sparse_dispatch_count=dispatch_counts[0],
                 dense_dispatch_count=dispatch_counts[1],
             )
-            proposed = float(self.counters[3])
-            a.prior_feedback_density = float(self.counters[7]) / proposed if proposed else None
+            a.prior_feedback_density = (
+                float(self.counters[7]) / self.feedback_capacity_rows
+                if self.feedback_capacity_rows
+                else None
+            )
             packet.update(
                 active_rows=int(a.active_count),
                 gradient_rows=float(self.counters[7]),
@@ -501,6 +535,7 @@ def begin_rpc(worker, group_id, projector_path, enabled, config_dict, rng_path=N
             _runtime.adapter, _runtime.cache = old.adapter, old.cache
             _runtime.proposal_workspace = old.proposal_workspace
             _runtime.feedback_workspace = old.feedback_workspace
+            _runtime.metadata_workspace = old.metadata_workspace
             _runtime.adapter.reset()
             _runtime.adapter.A.copy_(_runtime.projector)
             _runtime.cache.requests.clear()

@@ -4,6 +4,7 @@ set -euo pipefail
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "${MODEL_ENV:-$PROJECT_DIR/configs/$MODEL_KEY/b200.env}"
 source "${COMMON_ENV:-$PROJECT_DIR/configs/_shared/b200_common.env}"
+export RUNTIME_CHECK="${RUNTIME_CHECK:-auto}"
 # MODEL remains overridable for checkpoints stored under custom paths. Reject
 # a known model directory from another wrapper before creating any run files.
 _dflash_model_name="${MODEL%/}"
@@ -71,11 +72,26 @@ resolve_run() {
   export DFLASH_RUN_DIR="$RUN_DIR"
 }
 
+startup_checks() {
+  local kind="$1"
+  [[ -x "$DFLASH_MCORE_PYTHON" ]] || { echo "Missing MCore Python: $DFLASH_MCORE_PYTHON" >&2; return 2; }
+  if [[ "$kind" == train ]]; then
+    [[ -x "$DFLASH_VLLM_PYTHON" ]] || { echo "Missing vLLM Python: $DFLASH_VLLM_PYTHON" >&2; return 2; }
+  fi
+  case "$RUNTIME_CHECK" in
+    skip) echo 'Runtime check: skip (explicit; model/checkpoint/resume checks remain enabled).' ;;
+    auto|full)
+      "$PYTHON_BIN" "$PROJECT_DIR/scripts/runtime_checks.py" --mode "$RUNTIME_CHECK" || return "$?"
+      ;;
+    *) echo 'RUNTIME_CHECK must be auto, full, or skip' >&2; return 2 ;;
+  esac
+}
+
 prepare_run() {
   local kind="$1"
   [[ -x "$PYTHON_BIN" ]] || { echo "Missing Python environment: $PYTHON_BIN; see ENVIRONMENT.md" >&2; exit 2; }
   "$PYTHON_BIN" "$PROJECT_DIR/scripts/prepare_run.py" "$kind"
-  "$PYTHON_BIN" "$PROJECT_DIR/scripts/validate_environment.py" --require-runtime
+  startup_checks "$kind"
   mkdir -p "$OUTPUT_ROOT/$kind/$MODEL_KEY"
   ln -sfn "$RUN_DIR" "$OUTPUT_ROOT/$kind/$MODEL_KEY/active_run"
   if [[ "$kind" == train ]]; then

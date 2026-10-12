@@ -17,6 +17,5 @@ if [[ "$DRY_RUN" == true ]]; then
 fi
 export DRAFT_CHECKPOINT="$(readlink -f "$DRAFT_CHECKPOINT")"
 prepare_run train
-"$DFLASH_MCORE_PYTHON" "$PROJECT_DIR/scripts/check_dataset_helpers.py"
 "${cmd[@]}" 2>&1 | tee -a "$RUN_DIR/logs/console.log"
 ln -sfn "$RUN_DIR" "$OUTPUT_ROOT/train/$MODEL_KEY/latest_run"

@@ -152,10 +152,10 @@ def test_real_qwen25_geometry_and_native_configuration(model, tmp_path):
     rows = {row["parameter"]: row for row in matrix["entries"]}
     batch, accum = MODELS[model]
     assert rows["MODEL"]["status"] == "MATCH"
-    assert rows["BATCH_SIZE"]["effective_runtime_value"] == batch
-    assert rows["BATCH_SIZE"]["status"] == "MATCH"
+    assert rows["BATCH_SIZE"]["effective_runtime_value"] == 8
+    assert rows["BATCH_SIZE"]["status"] == ("MATCH" if batch == 8 else "DIFFERENT_BY_DESIGN")
     assert rows["ACCUMULATION_STEPS"]["SpecNaacl_value"] == accum
-    assert matrix["resolved_DFlash"]["policy"]["train_global_batch_size"] == batch * 8
+    assert matrix["resolved_DFlash"]["policy"]["train_global_batch_size"] == 8 * 8
     assert not list(tmp_path.glob("pretrain/*"))
 
 
