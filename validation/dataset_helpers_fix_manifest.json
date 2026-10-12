@@ -1,0 +1,15 @@
+{
+  "dflash_reflex/dataset_helpers.py": "d9ee9e852095bd2429791fa78c4194d3ca858bde8e25e9e791f976891940c50a",
+  "dflash_reflex/worker_runtime.py": "9e87bb0dc5f0a6961b08c54217b6d9739266f7482c60bb0367b0683dd9328095",
+  "scripts/check_dataset_helpers.py": "e16e57517abaf52d891479e6e826138ab5fdbe5dec450bc0aec8759be8e39141",
+  "scripts/patch_upstream.py": "4637e9c278aa0d9f2990f5e226f2673bfa07da8d843e0a0a83db0056f7cc2e47",
+  "scripts/launch/train_model.sh": "0d9453ca1c6800b3f8ab2767c397da2019e136fbabfc62471c9effac20222fb3",
+  "patches/nemo-rl.patch": "72210f9ccc5cf55929b9296f3de902f83bc8746a1c310aa05ad1298181122773",
+  "OFFLINE.md": "72df261c1f8b37fc54725878b60698e1323f28a02b14e2b3bce56926a5bf7a2f",
+  "tests/test_dataset_helpers.py": "025ff0e4e88e2a5bcbd8895ae29c316d724770bb3dd963033a48dec8a4e8a091",
+  "tests/test_worker_runtime.py": "267ad13ee0855bf34b57f7a9ef8205f5c31c8c3fb4ab9739d451f1115b00f60b",
+  "tests/test_patches.py": "b05ebd97c2917b652c90f8d4e7a705212a18c9c88e1ff75d68acb6689606d8eb",
+  "validation/dataset_helpers_fix_report.json": "61c2954f993227d733e00eb145dac39ce253a70961c2c1b3368c4cd2d2a36069",
+  "validation/dataset_helpers_fix_tests.xml": "422118eb650d5492a5f02ec4d510a08069d067905ab0f16dbab8dba7ae6f8007",
+  "validation/dataset_helpers_launcher_tests.xml": "646292f2249ee8a7ad9eb0ebc4d03c730e6c9bf729432708e19239f930481431"
+}

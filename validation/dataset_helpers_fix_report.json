@@ -1,0 +1,33 @@
+{
+  "created_utc": "2026-10-12T08:10:56.225231+00:00",
+  "root_cause": "Worker Python 3.13 invokes Megatron Makefile whose python3/python3-config resolve to old .venv Python 3.10; wrong EXT_SUFFIX and missing pybind11 headers terminate actor.",
+  "attachment": "09f80957-b3e4-4491-af13-0c8bada19bf1/Pasted text.txt",
+  "changes": [
+    "Resolve CPython/pybind11 headers and ABI suffix from the actual mcore interpreter.",
+    "Retain original Makefile compiler flags and original dataset C++ algorithms; override CPPFLAGS/LIBEXT/OUT only.",
+    "Hook the compile_helpers alias in Bridge before initialize_megatron, without modifying nested Megatron repositories.",
+    "Serialize builds, validate imports, publish .so atomically and reuse compatible current artifact.",
+    "Run a CPU-only preflight before launching train/vLLM, avoiding model loading before reporting build failures."
+  ],
+  "tests": {
+    "worker_dataset_and_vendor_suite": {
+      "passed": 25,
+      "failed": 0,
+      "seconds": 6.33
+    },
+    "launcher_suite": {
+      "passed": 41,
+      "failed": 0,
+      "seconds": 5.64
+    },
+    "total_passed": 66,
+    "native_build": "Original pinned helpers.cpp compiled under local Python 3.12.2 with pybind11 3.0.4, while PATH Python/config are intentionally wrong. Native blending-index function verified.",
+    "failure_recovery": "Compile failure preserves previous working .so; repeat build reuses cache without changing mtime.",
+    "source_patch": "Patch generated from pinned NeMo source, applied twice in tests, compared with actual files; stored patch separately applied and compared.",
+    "shell_syntax": "bash -n scripts/launch/train_model.sh passed"
+  },
+  "b200_training_verified": false,
+  "cuda_rebuild_required": false,
+  "pretrain_required_again": false,
+  "limitations": "Local tests use Python 3.12 and CPU, not the target Python 3.13/B200 training stack."
+}

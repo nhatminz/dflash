@@ -186,6 +186,19 @@ index ba9ad5f..3f3e195 100644
  
          # Process the outputs - but preserve the original input padding structure
          output_ids_list = []
+diff --git a/nemo_rl/models/megatron/setup.py b/nemo_rl/models/megatron/setup.py
+index c82ab2a..38df2c0 100644
+--- a/nemo_rl/models/megatron/setup.py
++++ b/nemo_rl/models/megatron/setup.py
+@@ -1790,6 +1790,8 @@ def setup_model_and_optimizer(
+     state.initialize_async_checkpoint_worker()
+ 
+     megatron_cfg.dist.external_gpu_device_mapping = True
++    from dflash_reflex.dataset_helpers import configure_megatron_dataset_builder
++    configure_megatron_dataset_builder()
+     initialize_megatron(
+         cfg=megatron_cfg,
+         get_embedding_ranks=get_embedding_ranks,
 diff --git a/nemo_rl/models/policy/workers/megatron_policy_worker.py b/nemo_rl/models/policy/workers/megatron_policy_worker.py
 index 5fe93b0..b84100c 100644
 --- a/nemo_rl/models/policy/workers/megatron_policy_worker.py

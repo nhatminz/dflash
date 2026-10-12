@@ -175,6 +175,15 @@ def patch_vllm(root):
 
 
 def patch_nemo(root):
+    replace(
+        root / "models/megatron/setup.py",
+        "    megatron_cfg.dist.external_gpu_device_mapping = True\n"
+        "    initialize_megatron(\n",
+        "    megatron_cfg.dist.external_gpu_device_mapping = True\n"
+        "    from dflash_reflex.dataset_helpers import configure_megatron_dataset_builder\n"
+        "    configure_megatron_dataset_builder()\n"
+        "    initialize_megatron(\n",
+    )
     worker = root / "models/generation/vllm/vllm_worker.py"
     replace(
         worker,

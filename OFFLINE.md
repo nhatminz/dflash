@@ -1,5 +1,49 @@
 # B200 truy cập pip index nhưng không truy cập GitHub
 
+## Bản vá helper Megatron dùng nhầm Python trong PATH
+
+Log `No module named pybind11`, `helpers_cpp.cpython-310-...so` rồi
+`pybind11/pybind11.h: No such file or directory` xảy ra khi worker chạy
+Python 3.13 nhưng Makefile gọi `python3`/`python3-config` của `.venv` cũ.
+Ray báo actor chết sau khi hàm build của Megatron gọi `sys.exit(1)`;
+thông báo chung về giới hạn bộ nhớ không xác định nguyên nhân trong log này.
+
+Helper build mới lấy `Python.h`, pybind11 headers và `EXT_SUFFIX` trực tiếp
+từ interpreter MCore. Nó vẫn build nguyên `helpers.cpp` bằng Makefile đã pin,
+không bỏ qua dataset builder hoặc thay thuật toán. Callback được cài trước
+`initialize_megatron` để Bridge không gọi lại lệnh build sai. Các job dùng
+file lock, chỉ công bố `.so` sau khi build/import thành công, và tái sử dụng
+artifact cùng ABI còn hợp lệ. Build thất bại giữ nguyên artifact tốt cũ.
+
+Chuyển `b200_transfer/dflash_b200_dataset_helpers_fix.zip` vào `library/`
+trên B200 rồi chạy:
+
+```bash
+cd /workspace/storage-shared/nlp/minhpn19/dflash
+unzip -oq library/dflash_b200_dataset_helpers_fix.zip
+python3 scripts/patch_upstream.py --nemo-only
+source offline_packages/activate.sh
+"$DFLASH_MCORE_PYTHON" scripts/check_dataset_helpers.py
+
+CUDA_VISIBLE_DEVICES=0 DATASET=simplelr BATCH_SIZE=8 ACCUMULATION_STEPS=4 \
+  METHOD=dflash_reflex bash train_qwen25_3b.sh
+```
+
+Launcher tự chạy preflight helper bằng MCore trước khi khởi tạo vLLM;
+lần kiểm tra thứ hai tái sử dụng artifact. Chỉ build một helper C++ CPU,
+không build lại CUDA extension, không chạy lại setup hoặc pretrain. ZIP này
+đã gồm bản vá GPU ordinal/cổng vLLM trước đó. Nếu preflight xác nhận MCore
+thực sự thiếu pybind11, chỉ cài package khóa vào đúng interpreter:
+
+```bash
+uv pip install --python "$DFLASH_MCORE_PYTHON" pybind11==3.0.4
+```
+
+Kiểm tra local đã tái hiện Makefile hỏng khi PATH trỏ tới Python sai,
+build/import helper C++ gốc với interpreter đúng, chạy native dataset-index
+function, kiểm tra cache và bảo toàn `.so` khi compiler lỗi. Kiểm tra này
+dùng Python 3.12 trên máy local; chưa xác nhận toàn bộ train Python 3.13/B200.
+
 ## Bản vá khởi động train: GPU ordinal và cổng vLLM
 
 Nếu log báo `CUDA error: invalid device ordinal` tại
