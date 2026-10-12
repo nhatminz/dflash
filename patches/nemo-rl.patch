@@ -270,3 +270,29 @@ index 5fe93b0..b84100c 100644
          original_save_path = self.mcore_state.cfg.checkpoint.save
          is_async = self.mcore_state.cfg.checkpoint.async_save
          if is_async and self._requires_nvrx_cuda_cache_release():
+diff --git a/nemo_rl/utils/memory_tracker.py b/nemo_rl/utils/memory_tracker.py
+index be55426..8e03cdb 100644
+--- a/nemo_rl/utils/memory_tracker.py
++++ b/nemo_rl/utils/memory_tracker.py
+@@ -16,6 +16,7 @@ from typing import List, Optional
+ 
+ from psutil import Process
+ from pydantic import BaseModel, Field
++from ray import get_runtime_context
+ from ray.scripts.scripts import memory_summary
+ 
+ 
+@@ -40,7 +41,12 @@ class MemoryTrackerDataPoint(BaseModel):
+         ]
+ 
+     def get_snapshot_str(self) -> str:
+-        ray_memory_summary = memory_summary(stats_only=True, num_entries=5)
++        # Independent training jobs can own separate local Ray clusters.
++        # Query this driver's connected cluster instead of auto-discovery.
++        ray_memory_summary = memory_summary(
++            address=get_runtime_context().gcs_address,
++            stats_only=True, num_entries=5,
++        )
+         return f"""💭 Driver CPU memory tracker for {self.stage}:
+ - Mem usage before                  {self.memory_used_before_stage_gb:>7.2f} GB
+ - Mem usage after                   {self.memory_used_after_stage_gb:>7.2f} GB

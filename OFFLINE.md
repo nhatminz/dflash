@@ -1,5 +1,37 @@
 # B200 truy cập pip index nhưng không truy cập GitHub
 
+## Bản vá thống kê bộ nhớ khi có nhiều Ray cluster
+
+Lỗi `ConnectionError: Found multiple active Ray instances` sau
+`SETUP COMPLETE`, trong `MemoryTrackerDataPoint.get_snapshot_str`, đến từ
+`memory_summary` gọi auto-discovery mà không có địa chỉ cluster. Các job
+train độc lập có thể có Ray cluster riêng trên cùng node.
+
+Bản vá truyền `address=get_runtime_context().gcs_address` vào thống kê;
+địa chỉ lấy từ kết nối hiện tại của driver, không chọn ngẫu nhiên một cổng
+trong danh sách và không thay đổi `RAY_ADDRESS` toàn hệ thống. Giữ nguyên
+thống kê bộ nhớ, batch, model, dataset và thuật toán train.
+
+Chuyển `b200_transfer/dflash_b200_ray_memory_fix.zip` vào `library/` trên
+B200 và chạy từ gốc project khi lệnh train lỗi đã kết thúc:
+
+```bash
+cd /workspace/storage-shared/nlp/minhpn19/dflash
+unzip -oq library/dflash_b200_ray_memory_fix.zip
+python3 scripts/patch_upstream.py --nemo-only
+source offline_packages/activate.sh
+
+CUDA_VISIBLE_DEVICES=0 bash train_qwen25_3b.sh
+```
+
+Không chạy lại setup/pip install/pretrain, không cần dừng các job Ray khác.
+ZIP gồm các bản vá startup trước và cấu hình mặc định batch 8/accumulation 4
+cho sáu model Qwen. Kiểm tra đã tái hiện lỗi bằng tracker nguyên gốc,
+thực thi tracker đã vá với năm địa chỉ Ray giả lập, kiểm tra dùng đúng
+cluster dù có biến `RAY_ADDRESS` cũ, và tái tạo vendor patch từ commit pin.
+API đã được kiểm tra trên source trong wheel Ray 2.56.1, xác minh SHA256
+theo NeMo lock. Chưa chạy toàn bộ train trên B200 hoặc nhiều Ray cluster thật.
+
 ## Bản vá helper Megatron dùng nhầm Python trong PATH
 
 Log `No module named pybind11`, `helpers_cpp.cpython-310-...so` rồi

@@ -1,0 +1,30 @@
+{
+  "created_utc": "2026-10-12T09:35:38.933817+00:00",
+  "root_cause": "NeMo MemoryTracker calls memory_summary without address, causing Ray auto-discovery to fail when several local clusters are active.",
+  "fix": "Pass get_runtime_context().gcs_address to memory_summary so statistics query the cluster already connected to this driver.",
+  "tests": {
+    "passed": 7,
+    "failed": 0,
+    "command": ".venv-test/bin/python -m pytest -q tests/test_ray_memory_tracker.py tests/test_patches.py",
+    "coverage": [
+      "Pristine tracker reproduces multiple-cluster discovery error.",
+      "Actual patched tracker advances from Preparation to Generation using the connected cluster.",
+      "Two independently selected job contexts use their own GCS addresses despite stale RAY_ADDRESS.",
+      "Current context is queried per snapshot, not cached.",
+      "Actual connected-cluster failures remain visible.",
+      "Vendor patches apply twice from pristine pinned Git objects and reproduce actual files."
+    ]
+  },
+  "api_verification": {
+    "ray": "2.56.1",
+    "wheel_sha256": "81f2db202cc31bc3f5c4acf9ef154d10f1f39ece602d9d2d3108875c49bf01c3",
+    "verification": "Wheel SHA256 verified against NeMo uv.lock; inspected ray/runtime_context.py and ray/_private/internal_api.py.",
+    "context_property": "RuntimeContext.gcs_address checks current worker connection and returns self.worker.gcs_client.address.",
+    "summary_signature": "memory_summary(address=None, ...) forwards address to get_state_from_address."
+  },
+  "b200_training_verified": false,
+  "real_multiple_ray_clusters_tested": false,
+  "reinstall_required": false,
+  "other_ray_jobs_stopped": false,
+  "limitations": "Tracker tests use simulated Ray boundary modules and real NeMo/Pydantic/psutil code; no full B200 training run."
+}

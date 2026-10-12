@@ -175,6 +175,23 @@ def patch_vllm(root):
 
 
 def patch_nemo(root):
+    memory_tracker = root / "utils/memory_tracker.py"
+    replace(
+        memory_tracker,
+        "from ray.scripts.scripts import memory_summary\n",
+        "from ray import get_runtime_context\n"
+        "from ray.scripts.scripts import memory_summary\n",
+    )
+    replace(
+        memory_tracker,
+        "        ray_memory_summary = memory_summary(stats_only=True, num_entries=5)\n",
+        "        # Independent training jobs can own separate local Ray clusters.\n"
+        "        # Query this driver's connected cluster instead of auto-discovery.\n"
+        "        ray_memory_summary = memory_summary(\n"
+        "            address=get_runtime_context().gcs_address,\n"
+        "            stats_only=True, num_entries=5,\n"
+        "        )\n",
+    )
     replace(
         root / "models/megatron/setup.py",
         "    megatron_cfg.dist.external_gpu_device_mapping = True\n"

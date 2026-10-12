@@ -1,0 +1,19 @@
+{
+  "scripts/patch_upstream.py": "e82a492370aa584746554096e848121cc7b24f36bb8c1b461e81dae95c1a6d64",
+  "patches/nemo-rl.patch": "93848efd1a507b5e3d4234cfbf55cc4e50f455759f9ddb91c614cd828ace6e02",
+  "OFFLINE.md": "05a202633b7fcc8f98544a7f1ba43bb26a1923b01968c66e3aa840a635e8b0d9",
+  "dflash_reflex/worker_runtime.py": "9e87bb0dc5f0a6961b08c54217b6d9739266f7482c60bb0367b0683dd9328095",
+  "dflash_reflex/dataset_helpers.py": "d9ee9e852095bd2429791fa78c4194d3ca858bde8e25e9e791f976891940c50a",
+  "scripts/check_dataset_helpers.py": "e16e57517abaf52d891479e6e826138ab5fdbe5dec450bc0aec8759be8e39141",
+  "scripts/launch/train_model.sh": "0d9453ca1c6800b3f8ab2767c397da2019e136fbabfc62471c9effac20222fb3",
+  "tests/test_ray_memory_tracker.py": "cc5d053b2220aab644a77253abfa662ce1a5f1479753b6a95010ace422d89f27",
+  "tests/test_patches.py": "b05ebd97c2917b652c90f8d4e7a705212a18c9c88e1ff75d68acb6689606d8eb",
+  "validation/ray_memory_fix_report.json": "b35a740027155f7d02feb31976092d4d36bd9c87cd7e4fd5a3995b248e891132",
+  "validation/ray_memory_fix_tests.xml": "28b84d44a24801f9b9187597b99981234f8905ca4d641abad954fcea1fb46a24",
+  "configs/qwen25_1p5b/b200.env": "8c0b5b908e0faada0dcbc44d89be9dd3c930205b8ffcbfd6a3708f4f2e22db7c",
+  "configs/qwen25_3b/b200.env": "f0095d830ae086145e53a957a8f79a24eb9c182ced1a855c32abc2b5b3c1bbfd",
+  "configs/qwen25_7b/b200.env": "c970a2edb7c308cf720c3e2b05a083321910714c5015c50a108a6c182ec9ede6",
+  "configs/qwen25_14b/b200.env": "4db4c8a6e44518ff4ed69c0cd22ad6b9381ad8172c057fdb3559989770d60a06",
+  "configs/qwen3_1p7b/b200.env": "9cde50e4f94dfe00f061f123a5a398a35f1c6ee1fe003df859fc626408edb9a2",
+  "configs/qwen3_4b/b200.env": "1b9628f6998d4bfbb39401fb8c0d2dd75a2ced6f1eb85f30b144654b6595265a"
+}
