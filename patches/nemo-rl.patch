@@ -149,10 +149,25 @@ index e453f3b..8551a5a 100644
                          reward_dict = dapo_math_verify(response, ground_truth)
                          ret_score = reward_dict["score"]
 diff --git a/nemo_rl/models/generation/vllm/vllm_worker.py b/nemo_rl/models/generation/vllm/vllm_worker.py
-index ba9ad5f..67ef0e7 100644
+index ba9ad5f..3f3e195 100644
 --- a/nemo_rl/models/generation/vllm/vllm_worker.py
 +++ b/nemo_rl/models/generation/vllm/vllm_worker.py
-@@ -690,7 +690,7 @@ class BaseVllmGenerationWorker:
+@@ -373,6 +373,14 @@ class BaseVllmGenerationWorker:
+                 _load_model() later to perform the heavy model loading. This
+                 enables overlapping vLLM model loading with NeMo Gym init.
+         """
++        # Placement-group slot zero is shared by independent drivers.
++        # Lease a port window before vLLM caches environment variables.
++        if bundle_indices is not None and len(bundle_indices) == 1:
++            from dflash_reflex.worker_runtime import acquire_vllm_port
++            self._dflash_vllm_port_lease = acquire_vllm_port()
++            os.environ["VLLM_PORT"] = str(self._dflash_vllm_port_lease.port)
++            print(f"DFlash vLLM port window: {self._dflash_vllm_port_lease.port}", flush=True)
++
+         from nemo_rl.distributed.numa_utils import bind_to_gpu_numa
+ 
+         # Only bind single-GPU workers to their GPU's NUMA node.
+@@ -690,7 +698,7 @@ class BaseVllmGenerationWorker:
              gpu_memory_utilization=self.gpu_memory_utilization,
              enable_prefix_caching=_resolve_enable_prefix_caching(self.cfg["vllm_cfg"]),
              dtype=self.precision,
@@ -161,7 +176,7 @@ index ba9ad5f..67ef0e7 100644
              enforce_eager=self.cfg["vllm_cfg"]["enforce_eager"],
              max_model_len=self.cfg["vllm_cfg"]["max_model_len"],
              trust_remote_code=True,
-@@ -1043,7 +1043,8 @@ class VllmGenerationWorkerImpl(VllmCheckpointEngineRpcMixin, BaseVllmGenerationW
+@@ -1043,7 +1051,8 @@ class VllmGenerationWorkerImpl(VllmCheckpointEngineRpcMixin, BaseVllmGenerationW
          # Convert inputs to vLLM format and generate outputs.
          prompts = format_prompt_for_vllm_generation(data)
          use_tqdm = self.cfg["vllm_cfg"].get("use_tqdm", True)
@@ -172,10 +187,36 @@ index ba9ad5f..67ef0e7 100644
          # Process the outputs - but preserve the original input padding structure
          output_ids_list = []
 diff --git a/nemo_rl/models/policy/workers/megatron_policy_worker.py b/nemo_rl/models/policy/workers/megatron_policy_worker.py
-index 5fe93b0..ae17e18 100644
+index 5fe93b0..b84100c 100644
 --- a/nemo_rl/models/policy/workers/megatron_policy_worker.py
 +++ b/nemo_rl/models/policy/workers/megatron_policy_worker.py
-@@ -589,6 +589,8 @@ class MegatronPolicyWorkerImpl(
+@@ -451,8 +451,10 @@ class MegatronPolicyWorkerImpl(
+         # Must be the first CUDA-touching call in this process.
+         # With `RAY_EXPERIMENTAL_NOSET_CUDA_VISIBLE_DEVICES=1` (set by `configure_worker()`),
+         gpu_ids = ray.get_gpu_ids()
+-        local_rank = int(gpu_ids[0])
++        from dflash_reflex.worker_runtime import policy_cuda_device
++        local_rank = policy_cuda_device(gpu_ids, os.environ.get("CUDA_VISIBLE_DEVICES"))
+         os.environ["LOCAL_RANK"] = str(local_rank)
++        print(f"DFlash policy GPU: physical={gpu_ids[0]}, cuda={local_rank}", flush=True)
+         torch.cuda.set_device(local_rank)
+ 
+         # Apply patch from https://github.com/NVIDIA/TransformerEngine/pull/2286/files
+@@ -460,11 +462,8 @@ class MegatronPolicyWorkerImpl(
+ 
+         from nemo_rl.distributed.numa_utils import bind_to_gpu_numa
+ 
+-        # local_rank (== ray.get_gpu_ids()[0]) is the physical GPU index that
+-        # keys the affinity file. Pass it explicitly: CUDA_VISIBLE_DEVICES lists
+-        # all node devices here (RAY_EXPERIMENTAL_NOSET_CUDA_VISIBLE_DEVICES=1,
+-        # set by configure_worker), so it can't identify this worker's GPU.
+-        bind_to_gpu_numa(local_rank)
++        # NUMA affinity uses the physical GPU ID; CUDA uses its masked ordinal.
++        bind_to_gpu_numa(int(gpu_ids[0]))
+ 
+         # OTel providers are process-global, so the driver's setup does not
+         # reach this actor. No-op unless telemetry is enabled.
+@@ -589,6 +588,8 @@ class MegatronPolicyWorkerImpl(
          self.checkpointing_context = model_and_optimizer_state.checkpointing_context
          param_sync_func = model_and_optimizer_state.param_sync_func
          self.draft_model = model_and_optimizer_state.draft_model
@@ -184,7 +225,7 @@ index 5fe93b0..ae17e18 100644
          self._colocated_reshard_plan = model_and_optimizer_state.colocated_reshard_plan
          log_gpu_memory_diagnostics(
              label="after_model_setup", worker_type="MegatronPolicyWorker"
-@@ -698,6 +700,8 @@ class MegatronPolicyWorkerImpl(
+@@ -698,6 +699,8 @@ class MegatronPolicyWorkerImpl(
  
          self._init_inference_engine_state()
          self._setup_colocated_cuda_graph_managers()
@@ -193,7 +234,7 @@ index 5fe93b0..ae17e18 100644
  
          log_gpu_memory_diagnostics(
              label="init_complete", worker_type="MegatronPolicyWorker"
-@@ -1056,9 +1060,13 @@ class MegatronPolicyWorkerImpl(
+@@ -1056,9 +1059,13 @@ class MegatronPolicyWorkerImpl(
  
                  # Update parameters.
                  if not eval_mode:
@@ -207,7 +248,7 @@ index 5fe93b0..ae17e18 100644
                      # Megatron-LM PR #4116 replaced the optimizer.mtp_grad_norm attribute
                      # with a per-group dict populated during gradient clipping. Value is
                      # None when clip_grad == 0 or this rank owns no MTP-tagged params
-@@ -3721,6 +3729,8 @@ class MegatronPolicyWorkerImpl(
+@@ -3721,6 +3728,8 @@ class MegatronPolicyWorkerImpl(
                  "Megatron core state or model is not initialized. Cannot save checkpoint."
              )
  

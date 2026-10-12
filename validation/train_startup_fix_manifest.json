@@ -1,0 +1,10 @@
+{
+  "dflash_reflex/worker_runtime.py": "9e87bb0dc5f0a6961b08c54217b6d9739266f7482c60bb0367b0683dd9328095",
+  "scripts/patch_upstream.py": "410532a0b79a0c1fb5257c9e863d8b9a05e324524e608aa8b7c26270690b2d31",
+  "patches/nemo-rl.patch": "5c1515f012496e1ecff4486d0451d8e89df9a9fb49a5054e95f44c0570903c44",
+  "tests/test_worker_runtime.py": "267ad13ee0855bf34b57f7a9ef8205f5c31c8c3fb4ab9739d451f1115b00f60b",
+  "tests/test_patches.py": "b05ebd97c2917b652c90f8d4e7a705212a18c9c88e1ff75d68acb6689606d8eb",
+  "OFFLINE.md": "2bb79a2e527fb24279ead17d409f1abf36aa769a53dc143eca8a37ebe9779b77",
+  "validation/train_startup_fix_report.json": "a011a0c3df53abcc0eebc81c26c19c1ff468638243c40a3bd7f56e5a551438f1",
+  "validation/train_startup_fix_tests.xml": "ee4df155361d009c6ab94be069cd882bbd5a91358fc0d46aadc1ea679008b1dc"
+}

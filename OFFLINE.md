@@ -1,5 +1,47 @@
 # B200 truy cập pip index nhưng không truy cập GitHub
 
+## Bản vá khởi động train: GPU ordinal và cổng vLLM
+
+Nếu log báo `CUDA error: invalid device ordinal` tại
+`MegatronPolicyWorkerImpl.__init__`, NeMo đang dùng ID GPU vật lý từ Ray
+cho `torch.cuda.set_device`. Với `CUDA_VISIBLE_DEVICES=1`, CUDA chỉ thấy
+một GPU mang chỉ số `0`. Bản vá chuyển ID theo mask trước lần chọn thiết bị,
+giữ ID vật lý cho NUMA affinity. Không gọi CUDA để dò thiết bị trong helper.
+
+Nếu log báo `DistNetworkError ... port: 7000 ... EADDRINUSE`, các job độc lập
+có thể cùng dùng engine slot `0` và chọn cổng `7000`. Worker một GPU nay
+giữ file lock cho một vùng 100 cổng trong `7000..8999` suốt vòng đời actor,
+kiểm tra vùng chưa bị dịch vụ khác chiếm rồi đặt `VLLM_PORT` trước khi khởi
+tạo vLLM. Lock tự được hệ điều hành giải phóng khi process chết; không xóa
+file lock đang dùng. Cơ chế phối hợp các job DFlash cùng user và cùng thư
+mục temporary trên node; không đặt lại cổng của ứng dụng bên ngoài.
+
+Chuyển `b200_transfer/dflash_b200_train_startup_fix.zip` vào `library/` trên
+B200. Khi lệnh train bị lỗi đã kết thúc, áp dụng từ gốc project:
+
+```bash
+cd /workspace/storage-shared/nlp/minhpn19/dflash
+unzip -oq library/dflash_b200_train_startup_fix.zip
+python3 scripts/patch_upstream.py --nemo-only
+source offline_packages/activate.sh
+```
+
+Không cần chạy lại setup, pip install, pretrain, hoặc dừng toàn bộ Ray.
+Chạy lại lệnh train đã lỗi; ví dụ Qwen3-1.7B Reflex:
+
+```bash
+CUDA_VISIBLE_DEVICES=1 DATASET=simplelr BATCH_SIZE=8 ACCUMULATION_STEPS=4 \
+  METHOD=dflash_reflex bash train_qwen3_1p7b.sh
+```
+
+Bản vá áp dụng cả DFlash baseline và Reflex. Đầu log mới có
+`DFlash policy GPU: physical=1, cuda=0` nếu dùng GPU 1, và
+`DFlash vLLM port window: ...`. Các job đồng thời trên cùng node có vùng
+cổng khác nhau. Kiểm tra local thực thi đoạn constructor đã vá, NUMA dùng
+ID vật lý, sáu process cùng tạo TCPStore thật, lock được giải phóng khi
+process bị dừng, và patch tái tạo từ commit đã pin/applied hai lần.
+Đây là kiểm tra startup trên CPU; chưa xác nhận toàn bộ train trên B200.
+
 Lỗi `No route to host` ở bước fetch NeMo là thiếu source, chưa phải lỗi CUDA.
 Một `.git` rỗng sau fetch thất bại không chứa commit để chạy. Backend được pin
 cần Python >=3.13.14,<3.14, khác Python 3.12 đang dùng để gọi setup trong log.

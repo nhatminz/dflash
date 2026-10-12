@@ -178,6 +178,19 @@ def patch_nemo(root):
     worker = root / "models/generation/vllm/vllm_worker.py"
     replace(
         worker,
+        "        from nemo_rl.distributed.numa_utils import bind_to_gpu_numa\n",
+        "        # Placement-group slot zero is shared by independent drivers.\n"
+        "        # Lease a port window before vLLM caches environment variables.\n"
+        "        if bundle_indices is not None and len(bundle_indices) == 1:\n"
+        "            from dflash_reflex.worker_runtime import acquire_vllm_port\n"
+        "            self._dflash_vllm_port_lease = acquire_vllm_port()\n"
+        '            os.environ["VLLM_PORT"] = str(self._dflash_vllm_port_lease.port)\n'
+        '            print(f"DFlash vLLM port window: {self._dflash_vllm_port_lease.port}", flush=True)\n'
+        "\n"
+        "        from nemo_rl.distributed.numa_utils import bind_to_gpu_numa\n",
+    )
+    replace(
+        worker,
         "        outputs = self.llm.generate(prompts, sampling_params, use_tqdm=use_tqdm)",
         "        from dflash_reflex.nemo_bridge import generate_cohort\n"
         "        outputs = generate_cohort(self.llm, prompts, sampling_params, use_tqdm=use_tqdm)",
@@ -188,6 +201,30 @@ def patch_nemo(root):
         '            seed=int(os.environ["TRAIN_SUBSET_SEED"]),\n',
     )
     worker = root / "models/policy/workers/megatron_policy_worker.py"
+    replace(
+        worker,
+        "        gpu_ids = ray.get_gpu_ids()\n"
+        "        local_rank = int(gpu_ids[0])\n",
+        "        gpu_ids = ray.get_gpu_ids()\n"
+        "        from dflash_reflex.worker_runtime import policy_cuda_device\n"
+        "        local_rank = policy_cuda_device(gpu_ids, os.environ.get(\"CUDA_VISIBLE_DEVICES\"))\n",
+    )
+    replace(
+        worker,
+        "        torch.cuda.set_device(local_rank)\n",
+        '        print(f"DFlash policy GPU: physical={gpu_ids[0]}, cuda={local_rank}", flush=True)\n'
+        "        torch.cuda.set_device(local_rank)\n",
+    )
+    replace(
+        worker,
+        "        # local_rank (== ray.get_gpu_ids()[0]) is the physical GPU index that\n"
+        "        # keys the affinity file. Pass it explicitly: CUDA_VISIBLE_DEVICES lists\n"
+        "        # all node devices here (RAY_EXPERIMENTAL_NOSET_CUDA_VISIBLE_DEVICES=1,\n"
+        "        # set by configure_worker), so it can't identify this worker's GPU.\n"
+        "        bind_to_gpu_numa(local_rank)\n",
+        "        # NUMA affinity uses the physical GPU ID; CUDA uses its masked ordinal.\n"
+        "        bind_to_gpu_numa(int(gpu_ids[0]))\n",
+    )
     replace(
         worker,
         "        self.draft_model = model_and_optimizer_state.draft_model\n",
@@ -288,9 +325,14 @@ def patch_nemo(root):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--vllm-installed", action="store_true")
+    group = p.add_mutually_exclusive_group()
+    group.add_argument("--vllm-installed", action="store_true")
+    group.add_argument("--nemo-only", action="store_true",
+                       help="Patch editable NeMo source only; no installs or CUDA builds")
     a = p.parse_args()
-    if a.vllm_installed:
+    if a.nemo_only:
+        patch_nemo(ROOT / "third_party/nemo-rl/nemo_rl")
+    elif a.vllm_installed:
         if importlib.metadata.version("vllm") != "0.25.1":
             raise RuntimeError("only vLLM 0.25.1 has been source-audited")
         patch_vllm(Path(importlib.util.find_spec("vllm").origin).parent)

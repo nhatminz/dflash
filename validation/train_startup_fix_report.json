@@ -1,0 +1,28 @@
+{
+  "created_utc": "2026-10-12T06:57:15.389996+00:00",
+  "diagnostics": [
+    "MegatronPolicyWorker uses Ray physical GPU 1 as CUDA ordinal 1 under CUDA_VISIBLE_DEVICES=1; only ordinal 0 is visible.",
+    "Independent NeMo placement groups choose engine slot zero and race for vLLM rendezvous port 7000."
+  ],
+  "fixes": [
+    "Resolve CUDA ordinal from Ray allocation and inherited CUDA_VISIBLE_DEVICES before set_device; retain physical ID for NUMA.",
+    "Acquire node-local per-user file lock over a free 100-port vLLM window for single-GPU actor lifetime before vLLM environment caching.",
+    "Apply editable NeMo source hooks through --nemo-only without reinstalling any backend or rebuilding CUDA extensions."
+  ],
+  "tests": {
+    "command": ".venv-test/bin/python -m pytest -q tests/test_worker_runtime.py tests/test_patches.py",
+    "passed": 21,
+    "failed": 0,
+    "real_concurrency": "Six independent processes choose disjoint windows before binding real PyTorch TCPStore servers concurrently.",
+    "source_integration": "Execute actual patched worker startup AST; reproduce CUDA mask and capture physical NUMA binding.",
+    "reproducibility": "Recreate patched vendor files from pinned Git HEAD, apply twice, byte-compare and parse all patched files."
+  },
+  "pinned_nemo_commit": "c18e462adf34739951b3d21773f436eaee324b31",
+  "b200_training_verified": false,
+  "limitations": [
+    "Tests use CPU TCPStore and a CUDA selection stub, not the B200 CUDA training stack.",
+    "File locks coordinate DFlash jobs sharing UID and temporary directory on the same node; unrelated programs do not honor those locks."
+  ],
+  "dependencies_reinstalled": false,
+  "pretrain_required_again": false
+}
