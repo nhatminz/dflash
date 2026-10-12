@@ -12,6 +12,37 @@ Megatron đầy đủ trên B200**, vì thiếu runtime CUDA 13 và đường d�
 được yêu cầu. Các lệnh dưới đây dành cho máy có dữ liệu và môi trường phù hợp;
 không hiểu kết quả kiểm thử nhỏ là xác nhận chạy dài đã thành công.
 
+## Cập nhật lỗi CUDA khi rollout trên B200
+
+Log ngày 12/10 dừng bởi `CUDA illegal memory access` trong generation; các dòng
+Transformers báo thiếu docstring và thông báo Ray ở cuối không xác định kernel
+gây lỗi. Crash xảy ra khi batch còn 32 request × 16 token = 512, đúng ngưỡng
+CUDA graph. Đây là dấu hiệu cần điều tra, chưa phải bằng chứng kết luận kernel.
+
+Mặc định mới `VLLM_ENFORCE_EAGER=1` áp dụng cho cả target/draft ở cả baseline và
+Reflex, tránh compile/graph replay của vLLM trong lần chạy này. Cách này có thể
+giảm tốc độ; phải dùng cùng giá trị khi so hai phương pháp. Reflex đã sửa buffer
+token trả cho vLLM để không dùng chung vùng nhớ top-k sẽ bị tái sử dụng. Nếu
+generation lỗi, không gọi RPC đọc gradient/RNG trên engine đã lỗi; traceback
+được giữ và ghi thêm ở `<run>/generation_errors/` nếu worker còn trả ngoại lệ.
+Nếu native process abort trước đó, xem `<run>/logs/console.log` và log worker Ray.
+
+Chỉ cập nhật source project trên B200, không chạy lại setup/cài thư viện hoặc
+pretrain. Khởi động job mới (job đã chạy không tự nhận bản sửa):
+
+```bash
+cd /workspace/storage-shared/nlp/minhpn19/dflash
+source offline_packages/activate.sh
+CUDA_VISIBLE_DEVICES=2 VLLM_ENFORCE_EAGER=1 bash train_qwen3_1p7b.sh
+```
+
+Lệnh chọn pretrain checkpoint theo wrapper như trước. Nếu dùng checkpoint tùy
+chọn, giữ `DRAFT_CHECKPOINT=/đường/dẫn/checkpoint` của bạn. Batch mặc định 8,
+accumulation 4, checkpoint mỗi 50 GRPO iteration. Khi khởi động phải thấy
+`vLLM target/draft eager mode: True`. `VLLM_ENFORCE_EAGER=0` dành cho lần thử
+graph riêng; chưa được xác nhận an toàn trên B200. Bản sửa đã qua test CPU/CUDA
+trên 3090; chưa có kết quả full GRPO trên B200.
+
 
 ## Cập nhật correctness/fairness cuối
 
@@ -289,9 +320,10 @@ loss, pretrained drafter và online co-training giống nhau giữa hai chế đ
 | Kernels | `OPD_UPDATE_STREAM=1`, `OPD_PROPOSAL_MODE=auto`, `OPD_DENSE_IMPLEMENTATION=auto` |
 | Profiling | `OPD_PROFILE=0`, `OPD_DIAGNOSTICS=0`, `OPD_DISPATCH_CACHE=` |
 | Data/seed | `DATASET=simplelr`, `TRAIN_SUBSET_SEED=42`, `MAX_TRAIN_SAMPLES=0` |
-| Duration | `TRAIN_EPOCHS=1`, `MAX_GRPO_STEPS=1000000`, `SAVE_INTERVAL=10` |
+| Duration | `TRAIN_EPOCHS=1`, `MAX_GRPO_STEPS=1000000`, `SAVE_INTERVAL=50` |
 | Logging | `LOG_INTERVAL=1`, `ROLLOUT_LOG_FLUSH_INTERVAL=1` |
 | Memory/reward | `VLLM_MEMORY_UTILIZATION=0.65`, `REWARD_WORKERS=8` |
+| vLLM execution | `VLLM_ENFORCE_EAGER=1` cho cả target/draft và baseline/Reflex |
 | Output | `OUTPUT_ROOT=$PWD/outputs`, `RUN_NAME=...`, `RUN_DIR=...`, `RESUME=` |
 
 `ACCUMULATION_STEPS` quy định số microbatch tối thiểu; physical microbatch

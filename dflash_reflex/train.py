@@ -40,6 +40,11 @@ def main():
     ] = os.environ["DFLASH_MCORE_PYTHON"]
     register_omegaconf_resolvers()
     master = MasterConfig(**OmegaConf.to_container(load_config(a.config), resolve=True))
+    print(
+        "vLLM target/draft eager mode: "
+        f"{master.policy['generation']['vllm_cfg'].get('enforce_eager', False)}",
+        flush=True,
+    )
     root = Path(os.environ["DFLASH_RUN_DIR"])
     (root / "run_config.json").write_text(
         json.dumps(master.model_dump(), indent=2, default=str) + "\n"

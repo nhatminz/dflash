@@ -9,6 +9,28 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 
 
+@pytest.mark.parametrize("method", ["dflash", "dflash_reflex"])
+@pytest.mark.parametrize(
+    "model", ["qwen25_1p5b", "qwen25_3b", "qwen25_7b", "qwen25_14b", "qwen3_1p7b", "qwen3_4b"]
+)
+@pytest.mark.parametrize("eager", [None, "0"])
+def test_rollout_execution_mode_matches_target_and_draft(model, method, eager, tmp_path):
+    environment = {k: v for k, v in os.environ.items() if k != "VLLM_ENFORCE_EAGER"}
+    if eager is not None:
+        environment["VLLM_ENFORCE_EAGER"] = eager
+    process = subprocess.run(
+        ["bash", str(ROOT / f"train_{model}{'_dflash' if method == 'dflash' else ''}.sh")],
+        env=dict(environment, DRY_RUN="true", OUTPUT_ROOT=str(tmp_path)),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    config = json.loads(process.stdout[process.stdout.index("{\n") :])
+    generation = config["policy"]["generation"]
+    assert generation["vllm_cfg"]["enforce_eager"] is (eager is None)
+    assert generation["vllm_kwargs"]["speculative_config"]["enforce_eager"] is (eager is None)
+
+
 @pytest.mark.parametrize("prefix,suffix", [("pretrain", ""), ("train", ""), ("train", "_dflash")])
 @pytest.mark.parametrize(
     "key,directory",

@@ -18,6 +18,10 @@ def env(name, cast=str):
 
 
 def build_grpo_config(*, enforce_profile=True):
+    eager_value = os.environ.get("VLLM_ENFORCE_EAGER", "1").lower()
+    if eager_value not in {"0", "1", "true", "false"}:
+        raise ValueError("VLLM_ENFORCE_EAGER must be 0/1/true/false")
+    enforce_eager = eager_value in {"1", "true"}
     batch, responses, accum = (
         env("BATCH_SIZE", int),
         env("RESPONSES_PER_PROMPT", int),
@@ -182,6 +186,7 @@ def build_grpo_config(*, enforce_profile=True):
                 colocated=dict(enabled=True),
                 vllm_cfg=dict(
                     async_engine=False,
+                    enforce_eager=enforce_eager,
                     tensor_parallel_size=1,
                     pipeline_parallel_size=1,
                     expert_parallel_size=1,
@@ -195,6 +200,7 @@ def build_grpo_config(*, enforce_profile=True):
                     max_num_seqs=global_batch,
                     speculative_config=dict(
                         method="dflash",
+                        enforce_eager=enforce_eager,
                         model=env("DRAFT_CHECKPOINT"),
                         num_speculative_tokens=block - 1,
                         draft_sample_method="greedy",

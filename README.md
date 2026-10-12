@@ -22,6 +22,16 @@ the machine lacks that runtime, B200, and the specified local models/data.
 This is an implementation with bounded correctness tests, not a measured
 B200 speedup or a claim of completed production qualification.
 
+**B200 rollout stability update:** both training methods now default to
+`VLLM_ENFORCE_EAGER=1` for target and draft inference. This is a conservative
+bypass for the unqualified graph/refit path implicated by a crash at the
+512-token graph boundary, not a confirmed kernel root cause. It can reduce
+throughput; compare both methods with the same setting. Reflex now returns
+an owned, contiguous draft-token tensor instead of a view of its reusable
+top-k workspace. Failed rollouts preserve the original exception without
+requesting CUDA feedback/RNG from a failed engine. See
+[the investigation and validation](validation/b200_rollout_memory_fix.md).
+
 
 **Final correctness update:** `FAIRNESS_PROFILE=native_dflash` is the default
 for all launchers. Explicit `specnaacl_matched` **fails preflight** on this pinned integration. Seven

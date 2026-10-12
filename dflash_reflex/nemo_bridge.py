@@ -8,7 +8,9 @@ engines would silently turn shared B into per-shard B.
 
 import json
 import os
+import sys
 import time
+import traceback
 import uuid
 from dataclasses import asdict
 from pathlib import Path
@@ -66,7 +68,18 @@ def generate_cohort(llm, prompts, sampling_params, *, use_tqdm):
     try:
         outputs = llm.generate(prompts, sampling_params, use_tqdm=use_tqdm)
     except BaseException:
-        llm.collective_rpc(finish_rpc)
+        # finish_rpc reads CUDA counters/gradients/RNG and is a success-only
+        # boundary. A failed engine (especially after CUDA IMA) cannot service
+        # that RPC safely, and its second exception hides the original failure.
+        # This worker must fail; never publish feedback from a partial cohort.
+        error = traceback.format_exc()
+        print(error, file=sys.stderr, flush=True)
+        try:
+            directory = root / "generation_errors"
+            directory.mkdir(parents=True, exist_ok=True)
+            (directory / f"{group}.log").write_text(error)
+        except OSError:
+            pass  # Preserve the engine exception even if storage is unavailable.
         raise
     packets = llm.collective_rpc(finish_rpc)
     if len(packets) != 1:

@@ -87,6 +87,8 @@ class Runtime:
         self.verification_start = None
 
     def acceptance_buffer(self, batch_size):
+        if not 0 <= batch_size <= self.runner.max_num_reqs:
+            raise ValueError("DFlash verification exceeds request buffer capacity")
         if self.config.profile:
             self.verification_start = torch.cuda.Event(enable_timing=True)
             self.verification_start.record()
@@ -132,7 +134,12 @@ class Runtime:
             raw = model.compute_logits(hidden)
         width = self.runner.speculative_config.num_speculative_tokens
         batch = hidden.shape[0] // width
-        if len(self.request_ids) != batch:
+        if (
+            hidden.shape[0] != batch * width
+            or len(self.request_ids) != batch
+            or batch > self.runner.max_num_reqs
+            or raw.shape[0] != hidden.shape[0]
+        ):
             raise RuntimeError("DFlash proposal request/slot layout changed")
         if self.adapter is None:
             head = model.lm_head.weight
@@ -207,7 +214,11 @@ class Runtime:
             self.cache.ids[row] = ids.view(batch, width, -1)
             self.cache.q[row] = q.view(batch, width, -1)
             self.cache.norm[row] = norm.view(batch, width, 2)
-        return ids[:, 0]  # Actual proposal q is one-hot; verifier receives None.
+        # vLLM retains this tensor and may read it on its CPU-copy stream.
+        # The top-k workspace is reused by later proposal/selective-feedback
+        # kernels. Transfer ownership of the small argmax vector to vLLM;
+        # contiguous() alone would still alias the workspace when top-k is 1.
+        return ids[:, 0].clone(memory_format=torch.contiguous_format)
 
     @torch.no_grad()
     def verified(self, p, accepted, metadata, output_ids, *, greedy=False):
@@ -215,6 +226,29 @@ class Runtime:
             raise RuntimeError("feedback after cohort end")
         if not self.capture:
             return
+        configured_width = self.runner.speculative_config.num_speculative_tokens
+        lengths_cpu = metadata.num_draft_tokens
+        # These are host metadata checks, without a CUDA synchronization. They
+        # must precede both counter extraction and raw/cache address arithmetic.
+        if (
+            len(lengths_cpu) != len(self.request_ids)
+            or output_ids.ndim != 2
+            or output_ids.shape[0] != len(self.request_ids)
+            or not 1 <= output_ids.shape[1] <= configured_width + 1
+            or accepted.shape != (len(self.request_ids),)
+            or any(length < 0 or length > configured_width for length in lengths_cpu)
+            or max(lengths_cpu, default=0) >= output_ids.shape[1]
+            or sum(lengths_cpu) != metadata.draft_token_ids.numel()
+            or p.ndim != 2
+            or p.shape[0] != metadata.draft_token_ids.numel()
+        ):
+            raise ValueError("DFlash verification request/token layout changed")
+        if (
+            self.enabled
+            and p.shape[0]
+            and (self.raw is None or p.shape[1] != self.raw.shape[1] or not p.is_contiguous())
+        ):
+            raise ValueError("DFlash teacher/draft vocabulary or contiguous logits mismatch")
         if self.verification_start is not None:
             end = torch.cuda.Event(enable_timing=True)
             end.record()
