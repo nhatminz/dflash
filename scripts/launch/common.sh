@@ -30,6 +30,14 @@ export PYTHONPATH="$PROJECT_DIR:$PROJECT_DIR/third_party/nemo-rl${PYTHONPATH:+:$
 export DFLASH_MCORE_PYTHON="${DFLASH_MCORE_PYTHON:-$PROJECT_DIR/.venv-mcore/bin/python}"
 export DFLASH_VLLM_PYTHON="${DFLASH_VLLM_PYTHON:-$PROJECT_DIR/.venv-vllm/bin/python}"
 export NEMO_RL_PY_EXECUTABLES_SYSTEM=0
+export PYTHONUNBUFFERED=1
+# Keep native CPU pools small in each of the independent GPU jobs. Explicit
+# user settings remain supported; Ray CPU resources alone do not cap threads.
+export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
+export MKL_NUM_THREADS="${MKL_NUM_THREADS:-1}"
+export OPENBLAS_NUM_THREADS="${OPENBLAS_NUM_THREADS:-1}"
+export NUMEXPR_NUM_THREADS="${NUMEXPR_NUM_THREADS:-1}"
+export TOKENIZERS_PARALLELISM="${TOKENIZERS_PARALLELISM:-false}"
 export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 HF_DATASETS_OFFLINE=1
 export OUTPUT_ROOT="${OUTPUT_ROOT:-$PROJECT_DIR/outputs}"
 export DRY_RUN="${DRY_RUN:-false}"

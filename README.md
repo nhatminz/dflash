@@ -41,6 +41,13 @@ Missing verification ratios are `null`/`N/A`, never fabricated zeros. Runs made
 with inactive Reflex hooks are not valid Reflex experiments; restart from the
 same pretrain checkpoint. See [the AAL investigation](validation/reflex_runner_aal_fix.md).
 
+**Concurrent startup:** standalone training now creates a dedicated local Ray
+cluster per run, with 8 logical CPUs and a 1 GiB object store by default,
+bounded RPC thread pools, and dashboard UI disabled. Native CPU pools default
+to one thread and console output is unbuffered. Startup prints each phase and
+dumps Python stacks every 120 seconds spent in a phase; this diagnostic does
+not terminate a slow model load. See [the startup investigation](validation/concurrent_ray_startup_fix.md).
+
 
 **Final correctness update:** `FAIRNESS_PROFILE=native_dflash` is the default
 for all launchers. Explicit `specnaacl_matched` **fails preflight** on this pinned integration. Seven

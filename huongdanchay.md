@@ -211,6 +211,22 @@ mới; không resume trực tiếp checkpoint có batch/accumulation cũ.
 
 ### Chạy đồng thời 6 model
 
+Cấu hình GRPO hiện tạo cụm Ray riêng cho từng run: mặc định
+`DFLASH_RAY_NUM_CPUS=8`, `DFLASH_RAY_OBJECT_STORE_GB=1` (GiB), không bật dashboard
+UI. `num_cpus` là ngân sách scheduler, không phải giới hạn CPU của hệ điều hành.
+Các pool RPC mặc định 2 thread, không prestart worker cho driver đầu tiên;
+OMP/MKL/OpenBLAS/NumExpr mặc định 1 thread nếu chưa được người dùng đặt.
+Giữ các giá trị giống nhau cho DFlash và Reflex.
+
+Nếu log dừng ở `Started a local Ray instance`, dòng này chưa xác nhận driver
+đã kết nối xong. Bản mới in `[startup pid=... GPU=...]` cho Ray, tokenizer,
+dữ liệu và khởi tạo model. Sau 120 giây trong một giai đoạn, chương trình tự
+ghi stack trace vào `<run>/logs/console.log` rồi tiếp tục chờ; chữ `Timeout`
+trong bản dump này là chẩn đoán, không phải ngoại lệ làm dừng train.
+Địa chỉ cụm, thư mục Ray riêng trong `/tmp` và trạng thái khởi tạo nằm ở
+`<run>/logs/ray_startup.json`. Cập nhật source rồi chạy lại riêng các job bị
+kẹt. Không cần cài lại thư viện hoặc pretrain lại; giữ nguyên job đang train.
+
 Cài môi trường một lần trước; cần 6 GPU có đủ VRAM và đủ RAM/CPU cho 6 job.
 Các lệnh sau chạy mới, mỗi job một GPU. `MODEL` đã export từ một lần chạy
 model cụ thể phải được xóa, nếu không nó ghi đè đường dẫn của mọi wrapper.

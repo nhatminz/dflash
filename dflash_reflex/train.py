@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 
 from .model_contract import validate_checkpoint
+from .ray_startup import configure_ray_environment, init_local_ray, startup_stage
 
 
 def main():
@@ -17,6 +18,7 @@ def main():
     from .worker_runtime import configure_vllm_runner
 
     configure_vllm_runner()  # Before importing NeMo/vLLM and constructing actors.
+    configure_ray_environment()  # Ray native pools read defaults at import time.
     # Shape/tokenizer/path checks precede importing Ray, Megatron, or vLLM.
     validate_checkpoint(
         os.environ["MODEL"], os.environ["DRAFT_CHECKPOINT"], int(os.environ["DFLASH_BLOCK_SIZE"])
@@ -28,7 +30,6 @@ def main():
     # Upstream's vLLM and MCore extras conflict. Use separately locked actor
     # environments, prepared once by scripts/setup_environment.sh.
     from nemo_rl.distributed.ray_actor_environment_registry import ACTOR_ENVIRONMENT_REGISTRY
-    from nemo_rl.distributed.virtual_cluster import init_ray
     from nemo_rl.models.generation import configure_generation_config
     from nemo_rl.utils.config import load_config, register_omegaconf_resolvers
     from omegaconf import OmegaConf
@@ -52,29 +53,33 @@ def main():
     (root / "run_config.json").write_text(
         json.dumps(master.model_dump(), indent=2, default=str) + "\n"
     )
-    init_ray()
-    tokenizer = get_tokenizer(master.policy["tokenizer"])
+    with startup_stage("Ray initialization"):
+        init_local_ray(root)
+    with startup_stage("Tokenizer loading"):
+        tokenizer = get_tokenizer(master.policy["tokenizer"])
     master.policy["generation"] = configure_generation_config(
         master.policy["generation"], tokenizer, has_refit_draft_weights=True, trains_mtp=False
     )
-    dataset, val_dataset, task_to_env, val_task_to_env = setup_response_data(
-        tokenizer, master.data, master.env
-    )
-    (
-        policy,
-        generation,
-        gym,
-        cluster,
-        loader,
-        val_loader,
-        loss_fn,
-        logger,
-        checkpointer,
-        state,
-        config,
-        teacher_groups,
-        aliases,
-    ) = setup(master, tokenizer, dataset, val_dataset)
+    with startup_stage("Dataset and reward worker setup"):
+        dataset, val_dataset, task_to_env, val_task_to_env = setup_response_data(
+            tokenizer, master.data, master.env
+        )
+    with startup_stage("Policy and generation model setup"):
+        (
+            policy,
+            generation,
+            gym,
+            cluster,
+            loader,
+            val_loader,
+            loss_fn,
+            logger,
+            checkpointer,
+            state,
+            config,
+            teacher_groups,
+            aliases,
+        ) = setup(master, tokenizer, dataset, val_dataset)
     configure_driver(checkpointer.get_latest_checkpoint_path(), wall_start=wall_start)
     try:
         grpo_train(
