@@ -90,6 +90,18 @@ def generate_cohort(llm, prompts, sampling_params, *, use_tqdm):
     packet["rollout_responses"] = len(outputs)
     packet["rollout_prompts"] = len(prompts) / int(os.environ["RESPONSES_PER_PROMPT"])
     packet["generated_tokens"] = sum(len(o.outputs[0].token_ids) for o in outputs)
+    if (
+        enabled()
+        and packet["generated_tokens"] > len(outputs)
+        and (not packet.get("proposal_calls") or not packet.get("verification_calls"))
+    ):
+        raise RuntimeError(
+            "Reflex rollout generated multiple tokens without proposal/verification hooks: "
+            f"proposal_calls={packet.get('proposal_calls')}, "
+            f"verification_calls={packet.get('verification_calls')}. "
+            "No feedback was published. Check VLLM_USE_V2_MODEL_RUNNER=0 and apply "
+            "scripts/patch_upstream.py --vllm-installed with the vLLM environment."
+        )
     packet["iteration_id"] = json.loads((root / "ipc/iteration.json").read_text())["id"]
     packet_path = root / "ipc/feedback" / packet["iteration_id"] / (group + ".pt")
     atomic_save(packet, packet_path)

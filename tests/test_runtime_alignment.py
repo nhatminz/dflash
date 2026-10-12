@@ -10,6 +10,28 @@ from dflash_reflex.vllm_runtime import Runtime
 
 @pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA unavailable")
+def test_instrumented_baseline_counts_zero_acceptance_without_reflex_adapter():
+    runner = SimpleNamespace(
+        device="cuda", max_num_reqs=2, speculative_config=SimpleNamespace(num_speculative_tokens=3)
+    )
+    rt = Runtime(runner, "baseline", None, -1, False, ReflexConfig(metrics_mode="instrumented"))
+    rt.request_ids, rt.remaining, rt.eos = ["a", "b"], [8, 8], [[], []]
+    rt.discard = torch.zeros(2, device="cuda", dtype=torch.bool)
+    rt.verified(
+        torch.randn(6, 37, device="cuda").softmax(-1),
+        torch.zeros(2, device="cuda", dtype=torch.int32),
+        SimpleNamespace(num_draft_tokens=[3, 3], draft_token_ids=torch.ones(6, device="cuda")),
+        torch.tensor([[1, -1, -1, -1], [2, -1, -1, -1]], device="cuda"),
+    )
+    packet = rt.finish()
+    assert packet["core_metrics_available"]
+    assert packet["counters"][:4].tolist() == [2, 2, 0, 6]
+    assert packet["proposal_calls"] == 0 and packet["verification_calls"] == 1
+    assert rt.adapter is None and packet["grad_sum"] is None
+
+
+@pytest.mark.cuda
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA unavailable")
 @pytest.mark.parametrize("stream", [False, True])
 def test_variable_lengths_reordered_selective_and_version_guard(stream):
     torch.manual_seed(16)

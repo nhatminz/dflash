@@ -37,3 +37,24 @@ def test_generation_failure_preserves_original_without_cuda_finish(
         assert len(reports) == 1
         assert "illegal memory access" in reports[0].read_text()
     assert not (tmp_path / "ipc/feedback").exists()
+
+
+def test_reflex_without_hooks_never_publishes_feedback(tmp_path, monkeypatch):
+    import torch
+
+    from dflash_reflex import nemo_bridge as bridge
+
+    monkeypatch.setenv("DFLASH_RUN_DIR", str(tmp_path))
+    monkeypatch.setenv("METHOD", "dflash_reflex")
+    monkeypatch.setenv("BATCH_SIZE", "8")
+    monkeypatch.setenv("RESPONSES_PER_PROMPT", "8")
+    monkeypatch.setattr(bridge, "atomic_save", lambda *args: None)
+    output = SimpleNamespace(outputs=[SimpleNamespace(token_ids=[1, 2, 3])])
+    packet = dict(inference_rng={}, counters=torch.zeros(8), proposal_calls=0, verification_calls=0)
+    llm = SimpleNamespace(
+        collective_rpc=lambda *args, **kwargs: [packet],
+        generate=lambda *args, **kwargs: [output] * 64,
+    )
+    with pytest.raises(RuntimeError, match="without proposal/verification hooks"):
+        generate_cohort(llm, list(range(64)), None, use_tqdm=False)
+    assert not (tmp_path / "ipc/feedback").exists()

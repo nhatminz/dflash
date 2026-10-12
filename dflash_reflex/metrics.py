@@ -235,10 +235,14 @@ class Metrics:
             iter_accepted_tokens=int(accepted),
             iter_accepted_draft_tokens=int(accepted_draft),
             iter_proposed_draft_tokens=int(proposed),
-            iter_aal=ratio(accepted, rounds),
-            cumulative_aal=ratio(self.state["accepted"], self.state["rounds"]),
-            iter_acceptance_rate=ratio(accepted_draft, proposed),
-            cumulative_acceptance_rate=ratio(self.state["accepted_draft"], self.state["proposed"]),
+            iter_aal=ratio(accepted, rounds) if rounds else None,
+            cumulative_aal=ratio(self.state["accepted"], self.state["rounds"])
+            if self.state["rounds"]
+            else None,
+            iter_acceptance_rate=ratio(accepted_draft, proposed) if proposed else None,
+            cumulative_acceptance_rate=ratio(self.state["accepted_draft"], self.state["proposed"])
+            if self.state["proposed"]
+            else None,
             iter_generation_time_s=generation,
             iter_generation_tokens_per_s=ratio(generated, generation),
             iter_wall_time_s=wall,
@@ -351,7 +355,20 @@ class Metrics:
                 writer.writeheader()
             writer.writerow(row)
         extra = dict(
-            row, profile_ms=profile, upstream_timing=timing, upstream_metrics=train_metrics or {}
+            row,
+            profile_ms=profile,
+            upstream_timing=timing,
+            upstream_metrics=train_metrics or {},
+            rollout_hook_health=[
+                dict(
+                    group_id=p.get("group_id"),
+                    model_runner_module=p.get("model_runner_module"),
+                    proposal_calls=p.get("proposal_calls"),
+                    verification_calls=p.get("verification_calls"),
+                    updates=p.get("updates"),
+                )
+                for p in packets
+            ],
         )
         (self.run_dir / "statistics" / f"iteration_{row['iteration']:08d}.json").write_text(
             json.dumps(json_value(dict(row, profile_ms=profile)), allow_nan=False) + "\n"

@@ -39,10 +39,47 @@ CUDA_VISIBLE_DEVICES=2 VLLM_ENFORCE_EAGER=1 bash train_qwen3_1p7b.sh
 Lệnh chọn pretrain checkpoint theo wrapper như trước. Nếu dùng checkpoint tùy
 chọn, giữ `DRAFT_CHECKPOINT=/đường/dẫn/checkpoint` của bạn. Batch mặc định 8,
 accumulation 4, checkpoint mỗi 50 GRPO iteration. Khi khởi động phải thấy
-`vLLM target/draft eager mode: True`. `VLLM_ENFORCE_EAGER=0` dành cho lần thử
+`vLLM model runner: V1; target/draft eager mode: True`. `VLLM_ENFORCE_EAGER=0` dành cho lần thử
 graph riêng; chưa được xác nhận an toàn trên B200. Bản sửa đã qua test CPU/CUDA
 trên 3090; chưa có kết quả full GRPO trên B200.
 
+
+## Sửa AAL=0 và đường chạy Reflex
+
+`aal=N/A` ở baseline production nghĩa là không thu thống kê acceptance, đúng
+thiết kế. `aal=0` kèm `iter_verification_rounds=0`, `A_version=0`,
+`B_update_rounds=0`, `iter_opd_feedback_rows=0` sau nhiều iteration cho thấy
+Reflex chưa chạy; không được coi là acceptance thực bằng 0.
+
+vLLM đã pin có thể tự chọn Model Runner V2 cho các Qwen dense. Hook của project
+chỉ có trên V1; `enforce_eager` không buộc chọn V1. Mặc định mới là
+`VLLM_USE_V2_MODEL_RUNNER=0` cho cả hai method, kiểm tra class runner thật trong
+worker, kiểm tra đủ ba vị trí hook và dừng nếu rollout Reflex nhiều token mà
+không có proposal/verification hook. Không có round hoặc proposal thì tỷ số
+được ghi `null` và hiển thị `N/A`. Log JSON có thêm `rollout_hook_health`.
+
+Sau khi cập nhật source, dùng môi trường đã cài để đảm bảo đủ Python hook:
+
+```bash
+source offline_packages/activate.sh
+"$DFLASH_VLLM_PYTHON" scripts/patch_upstream.py --vllm-installed
+```
+
+Lệnh patch chỉ sửa Python đã cài, không tải/build lại thư viện. Dừng riêng job
+cũ và chạy job mới từ cùng pretrain checkpoint; không resume run đã thiếu
+Reflex. Để so AAL, mở hai terminal và dùng instrumented cho cả hai:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 METRICS_MODE=instrumented bash train_qwen25_3b.sh
+CUDA_VISIBLE_DEVICES=1 METRICS_MODE=instrumented bash train_qwen25_3b_dflash.sh
+```
+
+Chọn GPU phù hợp với máy. Không cần ghi biến runner vì launcher đã đặt mặc định.
+Nếu shell có export `VLLM_USE_V2_MODEL_RUNNER=1`, unset nó trước; giá trị V2 bị
+từ chối thay vì âm thầm bỏ qua Reflex. Log phải in runner thật
+`vllm.v1.worker.gpu_model_runner`, và sau rollout nhiều token phải có số lần
+verification/feedback dương. Khi đo tốc độ, chạy cả hai với production; baseline
+sẽ tiếp tục hiển thị AAL `N/A` theo thiết kế.
 
 ## Cập nhật correctness/fairness cuối
 

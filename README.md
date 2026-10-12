@@ -32,6 +32,15 @@ top-k workspace. Failed rollouts preserve the original exception without
 requesting CUDA feedback/RNG from a failed engine. See
 [the investigation and validation](validation/b200_rollout_memory_fix.md).
 
+**Runner integration fix:** `VLLM_USE_V2_MODEL_RUNNER=0` is required for both
+methods. The pinned vLLM can automatically choose V2 for dense Qwen models,
+which bypasses the project's V1-only Reflex proposal/feedback hooks. Eager mode
+does not select V1. Launchers now pin V1, reject V2 overrides, verify the actual
+worker class, and refuse multi-token Reflex rollouts with inactive hooks.
+Missing verification ratios are `null`/`N/A`, never fabricated zeros. Runs made
+with inactive Reflex hooks are not valid Reflex experiments; restart from the
+same pretrain checkpoint. See [the AAL investigation](validation/reflex_runner_aal_fix.md).
+
 
 **Final correctness update:** `FAIRNESS_PROFILE=native_dflash` is the default
 for all launchers. Explicit `specnaacl_matched` **fails preflight** on this pinned integration. Seven

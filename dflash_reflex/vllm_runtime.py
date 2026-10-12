@@ -85,6 +85,8 @@ class Runtime:
         self.closed = False
         self.profile_events = []
         self.verification_start = None
+        self.proposal_calls = 0
+        self.verification_calls = 0
 
     def acceptance_buffer(self, batch_size):
         if not 0 <= batch_size <= self.runner.max_num_reqs:
@@ -130,6 +132,7 @@ class Runtime:
     def propose(self, model, hidden):
         from . import kernels
 
+        self.proposal_calls += 1
         with self.phase("draft_head_ms"):
             raw = model.compute_logits(hidden)
         width = self.runner.speculative_config.num_speculative_tokens
@@ -226,6 +229,7 @@ class Runtime:
             raise RuntimeError("feedback after cohort end")
         if not self.capture:
             return
+        self.verification_calls += 1
         configured_width = self.runner.speculative_config.num_speculative_tokens
         lengths_cpu = metadata.num_draft_tokens
         # These are host metadata checks, without a CUDA synchronization. They
@@ -415,6 +419,9 @@ class Runtime:
             inference_rng=rng_state(),
             core_metrics_available=self.capture,
             metrics_mode=self.config.metrics_mode,
+            proposal_calls=self.proposal_calls,
+            verification_calls=self.verification_calls,
+            model_runner_module=type(self.runner).__module__,
         )
         if self.adapter is not None:
             a = self.adapter
@@ -456,6 +463,19 @@ def profiled_forward(label, function, *args, **kwargs):
 
 def begin_rpc(worker, group_id, projector_path, enabled, config_dict, rng_path=None):
     global _runtime, _pool
+    module = type(worker.model_runner).__module__
+    if module.startswith("vllm.") and module != "vllm.v1.worker.gpu_model_runner":
+        raise RuntimeError(
+            f"Unsupported live vLLM runner {module}: Reflex hooks require "
+            "vllm.v1.worker.gpu_model_runner (VLLM_USE_V2_MODEL_RUNNER=0). "
+            "Restart both baseline and Reflex with the supported V1 runner."
+        )
+    if enabled and not HOOKS_ENABLED:
+        raise RuntimeError("Reflex requested but vLLM hooks were disabled at import time")
+    if _runtime is None and _pool is None:
+        print(
+            f"DFlash runtime: runner={module}; Reflex={enabled}; hooks={HOOKS_ENABLED}", flush=True
+        )
     if _runtime is not None and not _runtime.closed:
         raise RuntimeError("overlapping rollout cohorts on one vLLM engine")
     if rng_path and Path(rng_path).is_file():

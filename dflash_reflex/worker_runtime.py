@@ -2,9 +2,42 @@
 
 import fcntl
 import os
-from pathlib import Path
 import socket
 import tempfile
+from pathlib import Path
+
+
+def configure_vllm_runner():
+    """Pin the runner that carries the project's actual Reflex hooks."""
+    value = os.environ.setdefault("VLLM_USE_V2_MODEL_RUNNER", "0").lower()
+    if value not in {"0", "false"}:
+        raise ValueError(
+            "DFlash/Reflex requires VLLM_USE_V2_MODEL_RUNNER=0: "
+            "the pinned V2 runner bypasses the project's V1 proposal/feedback hooks. "
+            "Use V1 for both baseline and Reflex."
+        )
+    os.environ["VLLM_USE_V2_MODEL_RUNNER"] = "0"  # vLLM parses this using int().
+
+
+def inspect_vllm_hooks(root):
+    """Check all three V1 integration sites, not just a sampler marker."""
+    markers = {
+        "v1/spec_decode/llm_base_proposer.py": (
+            "return reflex.propose(self.model, hidden_states)",
+        ),
+        "v1/worker/gpu_model_runner.py": ("reflex.context(self)",),
+        "v1/sample/rejection_sampler.py": (
+            "reflex.acceptance_buffer",
+            "reflex.verified",
+            "accepted_prefix_ptr=feedback_accept",
+        ),
+    }
+    result = {}
+    for relative, required in markers.items():
+        path = Path(root) / relative
+        source = path.read_text() if path.is_file() else ""
+        result[relative] = all(marker in source for marker in required)
+    return result
 
 
 def policy_cuda_device(gpu_ids, visible_devices):
@@ -62,9 +95,11 @@ def acquire_vllm_port(*, low=7000, high=8999, width=100, lock_dir=None):
     """
     if not (0 < low <= high < 65536 and 0 < width <= high - low + 1):
         raise ValueError("Invalid vLLM port range/window")
-    directory = Path(lock_dir) if lock_dir is not None else Path(
-        tempfile.gettempdir()
-    ) / f"dflash-vllm-ports-{os.getuid()}"
+    directory = (
+        Path(lock_dir)
+        if lock_dir is not None
+        else Path(tempfile.gettempdir()) / f"dflash-vllm-ports-{os.getuid()}"
+    )
     directory.mkdir(parents=True, exist_ok=True)
     for base in range(low, high - width + 2, width):
         # Never unlink lock files: that would let two processes lock different

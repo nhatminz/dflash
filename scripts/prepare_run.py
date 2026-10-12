@@ -18,6 +18,9 @@ def env(name, cast=str):
 
 
 def build_grpo_config(*, enforce_profile=True):
+    from dflash_reflex.worker_runtime import configure_vllm_runner
+
+    configure_vllm_runner()
     eager_value = os.environ.get("VLLM_ENFORCE_EAGER", "1").lower()
     if eager_value not in {"0", "1", "true", "false"}:
         raise ValueError("VLLM_ENFORCE_EAGER must be 0/1/true/false")
@@ -301,6 +304,7 @@ def main():
     if a.kind == "train":
         runtime_contract = dict(
             method=env("METHOD"),
+            vllm_model_runner="v1",
             model_key=env("MODEL_KEY"),
             reflex=reflex,
             target_fingerprint=fingerprint(env("MODEL")),
@@ -326,7 +330,10 @@ def main():
             raise FileNotFoundError("active GRPO run has no committed resume checkpoint")
         saved = json.loads(launch_config.read_text())
         if a.kind == "train" and saved.pop("_dflash_runtime_contract", None) != runtime_contract:
-            raise ValueError("resume method, Reflex parameters, target or dataset differs")
+            raise ValueError(
+                "resume method, Reflex parameters, target, dataset or vLLM runner differs; "
+                "legacy runs without a recorded V1 runner require a fresh run"
+            )
         comparison = json.loads(json.dumps(config))
         # Step limits may be extended for a smoke-test continuation. The
         # pretraining schedule is based on full epochs, not this stop limit.

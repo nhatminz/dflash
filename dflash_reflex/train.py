@@ -14,6 +14,9 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--config", required=True)
     a = p.parse_args()
+    from .worker_runtime import configure_vllm_runner
+
+    configure_vllm_runner()  # Before importing NeMo/vLLM and constructing actors.
     # Shape/tokenizer/path checks precede importing Ray, Megatron, or vLLM.
     validate_checkpoint(
         os.environ["MODEL"], os.environ["DRAFT_CHECKPOINT"], int(os.environ["DFLASH_BLOCK_SIZE"])
@@ -41,7 +44,7 @@ def main():
     register_omegaconf_resolvers()
     master = MasterConfig(**OmegaConf.to_container(load_config(a.config), resolve=True))
     print(
-        "vLLM target/draft eager mode: "
+        "vLLM model runner: V1; target/draft eager mode: "
         f"{master.policy['generation']['vllm_cfg'].get('enforce_eager', False)}",
         flush=True,
     )

@@ -27,6 +27,30 @@ def test_sums_not_average_of_ratios_and_resume(tmp_path):
     assert len((tmp_path / "logs/metrics.jsonl").read_text().splitlines()) == 2
 
 
+def test_no_verification_is_missing_aal_not_zero_acceptance(tmp_path):
+    packet = dict(
+        counters=torch.zeros(8),
+        generated_tokens=100,
+        updates=0,
+        generation_time_s=1.0,
+        profile_ms={},
+        core_metrics_available=True,
+        proposal_calls=0,
+        verification_calls=0,
+    )
+    m = Metrics(tmp_path, "dflash_reflex", "simplelr")
+    row = m.record(0, 1, [packet], {}, wall=1.0)
+    assert row["iter_verification_rounds"] == 0
+    assert row["iter_aal"] is row["iter_acceptance_rate"] is None
+    assert row["step_aal"] is row["cumulative_aal"] is None
+    # Actual zero acceptance has valid rounds/proposals and still emits a
+    # recovered target token each round: AAL=1, acceptance=0.
+    packet["counters"] = torch.tensor([10, 10, 0, 150, 0, 0, 0, 0])
+    row = m.record(0, 2, [packet], {}, wall=1.0)
+    assert row["iter_aal"] == row["cumulative_aal"] == 1
+    assert row["iter_acceptance_rate"] == row["cumulative_acceptance_rate"] == 0
+
+
 def test_pretrain_log_resume_discards_future_and_partial_write(tmp_path):
     import json
 

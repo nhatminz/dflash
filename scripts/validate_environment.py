@@ -42,9 +42,15 @@ except Exception as error:
         code += """import vllm, deep_gemm
 from vllm.v1.spec_decode.dflash import DFlashProposer
 from pathlib import Path
+"""
+        code += f"""import sys
+sys.path.insert(0, {str(ROOT)!r})
+from dflash_reflex.worker_runtime import inspect_vllm_hooks
+hooks = inspect_vllm_hooks(Path(vllm.__file__).parent)
 result.update(vllm=m.version("vllm"), dflash_proposer=True,
     deep_gemm=deep_gemm.__version__,
-    reflex_patch="reflex.acceptance_buffer" in (Path(vllm.__file__).parent/"v1/sample/rejection_sampler.py").read_text())
+    reflex_patch=all(hooks.values()), reflex_patch_files=hooks,
+    vllm_runner_env={os.environ.get("VLLM_USE_V2_MODEL_RUNNER")!r})
 """
     code += "\nprint(json.dumps(result))"
     process = subprocess.run([str(python), "-c", code], capture_output=True, text=True)
