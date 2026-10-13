@@ -1,0 +1,149 @@
+{
+  "generated_utc": "2026-10-13T06:15:09.309870+00:00",
+  "full_tests": {
+    "name": "pytest",
+    "errors": "0",
+    "failures": "0",
+    "skipped": "0",
+    "tests": "375",
+    "time": "29.376",
+    "timestamp": "2026-10-13T13:11:57.571682+07:00",
+    "hostname": "hmi"
+  },
+  "analysis_tests": 42,
+  "ruff": "passed",
+  "shell_syntax": "passed",
+  "git_diff_check": "passed",
+  "development_runtime": {
+    "python": "3.12.2 | packaged by conda-forge | (main, Feb 16 2024, 20:50:58) [GCC 12.3.0]",
+    "torch": "2.4.1",
+    "cuda": "12.1",
+    "gpu": "NVIDIA GeForce RTX 3090",
+    "b200_available": false
+  },
+  "requested_runtime": {
+    "nemo-rl": {
+      "url": "https://github.com/MarkXCloud/RL",
+      "sha": "c18e462adf34739951b3d21773f436eaee324b31"
+    },
+    "vllm": {
+      "url": "https://github.com/vllm-project/vllm",
+      "sha": "752a3a504485790a2e8491cacbb35c137339ad34"
+    },
+    "original-dflash": {
+      "url": "https://github.com/z-lab/dflash",
+      "sha": "07ebd93db9f472af339b644bb70221ad8428328a"
+    },
+    "runtime": {
+      "flash-attn": "2.8.1+cu13torch2.10cxx11abitrue",
+      "ray": "2.56.1",
+      "torch": "2.11.0+cu130",
+      "transformer-engine": "2.15.0+42b8400",
+      "transformers": "5.12.1",
+      "triton": "3.6.0"
+    },
+    "python": "3.13",
+    "cuda": "13.0",
+    "vllm_version": "0.25.1",
+    "megatron_bridge_sha": "b11414c71b15e54d333eb49346ed199f20fa9021"
+  },
+  "inspected_source_commits": {
+    "nemo-rl": "c18e462adf34739951b3d21773f436eaee324b31",
+    "vllm": "752a3a504485790a2e8491cacbb35c137339ad34",
+    "megatron-bridge": "b11414c71b15e54d333eb49346ed199f20fa9021"
+  },
+  "added_files": [
+    "analysis/__init__.py",
+    "analysis/verification_feedback/README_VI.md",
+    "analysis/verification_feedback/__init__.py",
+    "analysis/verification_feedback/analysis.py",
+    "analysis/verification_feedback/checkpoints.py",
+    "analysis/verification_feedback/collector.py",
+    "analysis/verification_feedback/config.py",
+    "analysis/verification_feedback/data.py",
+    "analysis/verification_feedback/events.py",
+    "analysis/verification_feedback/hook.py",
+    "analysis/verification_feedback/io.py",
+    "analysis/verification_feedback/plotting.py",
+    "analysis/verification_feedback/statistics.py",
+    "run_dflash_motivation.sh",
+    "scripts/run_dflash_motivation.py",
+    "tests/test_motivation_checkpoints.py",
+    "tests/test_motivation_cli.py",
+    "tests/test_motivation_collection.py",
+    "tests/test_motivation_data.py",
+    "tests/test_motivation_events.py",
+    "tests/test_motivation_statistics.py",
+    "validation/DFLASH_MOTIVATION_IMPLEMENTATION.md",
+    "validation/dflash_motivation_tests.xml",
+    "validation/dflash_motivation_validation.json"
+  ],
+  "source_sha256": {
+    "analysis/__init__.py": "6bb072470fea5488e9c3f205e904894ad670b5e49a18876c227b45fbf8936d12",
+    "analysis/verification_feedback/README_VI.md": "ced6fab6c18b11aa2375b38688833f3d85594ddab8ef9f9eaf8f3da33e9f026d",
+    "analysis/verification_feedback/__init__.py": "f486e538d55a6eba0ddcf26ac540c693d878d2a9b6800982d3b11413ff418103",
+    "analysis/verification_feedback/analysis.py": "f47ad4303721664bcc1bc16b2336832440c1857aaf02e86042e7178fe8d7c2c9",
+    "analysis/verification_feedback/checkpoints.py": "39a1e6d95903db5e7fe8ce8a74b8ec10c1921d343a6316dbe615b49db3f01d7f",
+    "analysis/verification_feedback/collector.py": "8173517f660bbe84af4d163d5c7e09a200a75ecf8348ddca060f7155706018ce",
+    "analysis/verification_feedback/config.py": "d2c1d6e25443de84060dacdff9811501e4eb1347b4bae172b514497c6b2e7190",
+    "analysis/verification_feedback/data.py": "d20ae1fed21a418b264dafa3100d00139dad9d4c0fb62a931a727075d7c4d64f",
+    "analysis/verification_feedback/events.py": "bfee80c2c30478df275b06cb6ff37cbef23bc9b3ffd7d687a3758fa8525d70af",
+    "analysis/verification_feedback/hook.py": "0e80a1b9c08246b88a660913518c3b9555d76b062ee00da16f0cc03404c5d4bd",
+    "analysis/verification_feedback/io.py": "4bbdefde2779f3873acef95370f06d9e050cc38e5ce936c327c0cdb4bbe8485a",
+    "analysis/verification_feedback/plotting.py": "5bf0b6d11d2d56f74d45837bc4ada390b35c6b21fd915165ffea148feed7e30a",
+    "analysis/verification_feedback/statistics.py": "3d5d955a3fd978b45658039c3191f0d999c980f6c1dbaed84135ed0b6ed0ad7a",
+    "run_dflash_motivation.sh": "846ae57ed1ebb9946f342935318fd076fbc88f7f819fbe29979b27aed86a8925",
+    "scripts/run_dflash_motivation.py": "2261a2fb144143d612f3d5a4e2e9186e11e4e328f4a13bc25265c5d58ef5e153",
+    "tests/test_motivation_checkpoints.py": "5a547feb2de47562eb5da666b75d5d2dc629630ad9d377af7ee170b686a75f29",
+    "tests/test_motivation_cli.py": "6581dcdb59844f62d5015c791572643185fd79cef0de8b544ed533afd3e2a896",
+    "tests/test_motivation_collection.py": "9eb8e5dceb4858ca826a598945a7dd00866000b863e38a5245818fe507f012ac",
+    "tests/test_motivation_data.py": "8482e6a8517ac0192d089bafba1fc37b8c59db051391b31afa9c8d81c4b0a24b",
+    "tests/test_motivation_events.py": "b70461dba780f13c83b776342430a5a67fa5455011921fbf7c42eb7017d4e0f8",
+    "tests/test_motivation_statistics.py": "df3024b10b7cc6e0a26da0ef261c536487c2e0176bc58817f9dfe7c5655ab837",
+    "validation/DFLASH_MOTIVATION_IMPLEMENTATION.md": "483c394e20d218d6eea5d2647356c524f688cd16d77bb9341ac2d1a71edf2013",
+    "validation/dflash_motivation_tests.xml": "7d98a917af0716aa6663dd20a28bf636b74ae39c734e3cdb2ec401254444a782"
+  },
+  "reference_sha256": {
+    "../analysis_spec/README_E2_E6.md": "a618bd8eadffc9c41b88b7b1bb1ed6b6d5fa8cbb14089f990a81edd2df6795ac",
+    "../analysis_spec/e2e6/events.py": "623aaa9c22fec946432d65b10af2116c954ccea28a16c7bfcd7d4dce950cceca",
+    "../analysis_spec/e2e6/analysis.py": "7d32afb710735274cff3a19209f8170b6edc532515e12f679889ac7f9a40fd24",
+    "../analysis_spec/e2e6/collect.py": "e2870f8c5b6e102e7abb527f6450116269634d740599918019423e0a4bfd0e5e",
+    "../analysis_spec/run_e2_e6.py": "e8e942e6b5647d49f419e1e3b3f4c74b285e78a94cbfbdb1c3c461040aae4f20",
+    "../analysis_spec/motivation/data.py": "60cb2ec1b5f1576951abacdbb5b05e241250c5e4609058363d1885fef4048a9d",
+    "../analysis_spec/motivation/state.py": "e69abfd3737d6129c0b499c60c8d02071dc82c43585bd2cdb69cd6d64cd0eb9d",
+    "../analysis_spec/tests/test_e2e6.py": "a4b204c1d6585f80cddf05c94cfa1088a75a27c96a11f6bebbbd5e1bacbd5a47"
+  },
+  "genuine_experiment": {
+    "checkpoint_250_restored": false,
+    "checkpoint_600_restored": false,
+    "frozen_vllm_rollouts_executed": false,
+    "b200_sampling_parity": "not_run",
+    "measured_prompts": null,
+    "measured_responses": null,
+    "measured_rounds": null,
+    "measured_misses": null,
+    "risk_ratios": null,
+    "confidence_intervals": null,
+    "paper_figures_generated": false,
+    "blockers": [
+      "B200 source run/checkpoints/test split are absent on this host",
+      "Development Torch 2.4.1/CUDA 12.1 cannot certify pinned Torch 2.11/CUDA 13 vLLM execution",
+      "SPARK LaTeX source was not found"
+    ]
+  },
+  "genuine_check_command": {
+    "command": "RUNTIME_CHECK=skip PYTHON_BIN=$PWD/.venv-test/bin/python bash run_dflash_motivation.sh --mode check",
+    "exit_code": 1,
+    "error": {
+      "error": "FileNotFoundError",
+      "message": "No recorded policy configuration under /workspace/storage-shared/nlp/minhpn19/dflash/outputs/train/qwen25_3b/qwen25_3b__train__dflash__simplelr__seed42__20261012T180453Z__1108564"
+    }
+  },
+  "cpu_fixtures_are_not_experimental_findings": true,
+  "existing_training_files_modified": false,
+  "original_checkpoints_modified": false,
+  "new_libraries_installed": false,
+  "zip_created": false,
+  "execution_guide": "analysis/verification_feedback/README_VI.md",
+  "implementation_report": "validation/DFLASH_MOTIVATION_IMPLEMENTATION.md"
+}
